@@ -85,42 +85,32 @@ function detectPlatform(headers, rows) {
 function generateBrandVariants(input) {
   if (!input) return [];
   const raw = input.toLowerCase().trim();
-  // Strip domain extension to get core name
-  const core = raw.replace(/\..*$/, "").replace(/[^a-z0-9]/g, "");
-  // Also keep with dot variants like "gardenspace.pl"
-  const withDot = raw.includes(".") ? raw : null;
-  // Common Polish noun suffixes for all 7 cases + pl/sg
-  const polishSuffixes = [
-    "", "a", "u", "owi", "em", "ie", "e", // singular
-    "i", "y", "ów", "om", "ami", "ach",   // plural
-  ];
-  // Build from core (gardenspace → gardenspace, gardenspacea, etc.)
   const variants = new Set();
-  // Core as-is
-  variants.add(core);
-  if (withDot) variants.add(withDot);
-  // Also add raw input
+
+  // Always add the raw input (e.g. "gardenspace.pl" or "garden space")
   variants.add(raw);
-  // If core has segments (e.g. "garden-space" → also "gardenspace", "garden space")
-  if (raw.includes("-")) {
-    variants.add(raw.replace(/-/g, ""));
-    variants.add(raw.replace(/-/g, " "));
-    raw.split("-").forEach(p => p.length > 3 && variants.add(p));
+
+  // Strip known domain extensions → get core brand name
+  const noExt = raw.replace(/\.(pl|com|eu|net|org|io|co|de|fr|uk|shop|store|online)$/, "");
+  if (noExt !== raw) variants.add(noExt);  // e.g. "gardenspace"
+
+  // If there are hyphens → add without hyphens and each segment
+  if (noExt.includes("-")) {
+    const noHyphen = noExt.replace(/-/g, "");
+    variants.add(noHyphen);
+    noExt.split("-").forEach(seg => seg.length > 2 && variants.add(seg));
   }
-  if (raw.includes(" ")) {
-    variants.add(raw.replace(/ /g, ""));
-    variants.add(raw.replace(/ /g, "-"));
-    raw.split(" ").forEach(p => p.length > 3 && variants.add(p));
+
+  // If there are spaces → add without spaces
+  if (noExt.includes(" ")) {
+    variants.add(noExt.replace(/ /g, ""));
+    variants.add(noExt.replace(/ /g, "-"));
+    noExt.split(" ").forEach(seg => seg.length > 2 && variants.add(seg));
   }
-  // Polish declension for core (only if core looks Polish: has ó,ą,ę,ś,ć,ń,ź,ż or common endings)
-  const polishChars = /[ąćęłńóśźż]/;
-  if (polishChars.test(core) || /[aeiou]$/.test(core)) {
-    polishSuffixes.forEach(s => {
-      const stripped = core.replace(/[aeiou]{1,2}$/, "");
-      if (stripped.length > 2) variants.add(stripped + s);
-    });
-  }
-  return [...variants].filter(v => v.length > 1);
+
+  // Filter out generic words that would cause false positives
+  const stopWords = new Set(["sklep", "shop", "store", "online", "pl", "com", "net", "eu", "the", "and"]);
+  return [...variants].filter(v => v.length > 1 && !stopWords.has(v));
 }
 
 /* ── Parse Ahrefs buffer ───────────────────────────────────────────────────── */
@@ -490,7 +480,9 @@ export default function App() {
   const [errors, setErrors] = useState([]);
   const [allDetectedMentions, setAllDetectedMentions] = useState([]);
   const [brandMentionKey, setBrandMentionKey] = useState("");
-  const [brandVariants, setBrandVariants] = useState([]);
+  const [brandVariants, setBrandVariants] = useState([]); // user's overrides (chips)
+  const [removedAutoVariants, setRemovedAutoVariants] = useState(new Set()); // auto variants user removed
+  const [variantInput, setVariantInput] = useState(""); // text field for adding custom
   const [allVariantHits, setAllVariantHits] = useState({});
   const [promptCopied, setPromptCopied] = useState(false);
 
@@ -499,10 +491,11 @@ export default function App() {
     .replace(/\..*$/, "")
     .trim() || brand.name.toLowerCase().split(/\s+/)[0];
   const brandKey = brandMentionKey.trim() || autoKey;
-  // Variants: user-selected or auto-generated from brand name/url
-  const variantsInUse = brandVariants.length > 0
-    ? brandVariants
-    : generateBrandVariants(brand.url || brand.name);
+  // Auto variants from brand name, minus ones user removed
+  const autoVariants = generateBrandVariants(brand.url || brand.name)
+    .filter(v => !removedAutoVariants.has(v));
+  // Final variants = auto (minus removed) + user custom
+  const variantsInUse = [...new Set([...autoVariants, ...brandVariants])];
 
   // Re-parse all files when brandKey changes
   useEffect(() => {
@@ -735,33 +728,57 @@ export default function App() {
               <Inp label="URL / domena marki *" value={brand.url} set={v => setBrand(b => ({ ...b, url: v }))} ph="gardenspace.pl" />
               <Inp label="Branża" value={brand.industry} set={v => setBrand(b => ({ ...b, industry: v }))} ph="np. Meble ogrodowe / E-commerce" span2 />
             </div>
-            {(brand.name || brand.url) && (() => {
-              const vs = generateBrandVariants(brand.url || brand.name);
-              return vs.length > 0 ? (
-                <Card style={{ marginBottom: 14 }}>
-                  <CLabel>Warianty marki do sprawdzenia (auto-generowane)</CLabel>
-                  <div style={{ fontSize: 12, color: S.muted, marginBottom: 10, lineHeight: 1.6 }}>
-                    System sprawdzi kolumnę <strong style={{ color: S.text }}>Mentions</strong> pod kątem tych wariantów — odmiany, skróty, domena. Możesz dodać własne oddzielone przecinkami:
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                    {vs.map((v, i) => (
-                      <span key={i} style={{ padding: "3px 11px", borderRadius: 16, fontSize: 11, fontWeight: 700, background: S.green + "18", border: "1px solid " + S.green + "33", color: S.green }}>{v}</span>
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                      value={brandVariants.join(", ")}
-                      onChange={e => setBrandVariants(e.target.value.split(",").map(v => v.trim()).filter(Boolean))}
-                      placeholder="Dodaj własne warianty oddzielone przecinkami..."
-                      style={{ flex: 1, background: S.navy1, border: "1px solid " + S.border, borderRadius: 8, padding: "8px 12px", color: S.text, fontSize: 12, outline: "none" }}
-                    />
-                    {brandVariants.length > 0 && (
-                      <button onClick={() => setBrandVariants([])} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + S.border, borderRadius: 8, color: S.muted, fontSize: 11, cursor: "pointer" }}>✕ Reset</button>
-                    )}
-                  </div>
-                </Card>
-              ) : null;
-            })()}
+            {(brand.name || brand.url) && autoVariants.length > 0 && (
+              <Card style={{ marginBottom: 14 }}>
+                <CLabel>Warianty nazwy marki — system szuka każdego z nich w kolumnie Mentions</CLabel>
+                <div style={{ fontSize: 12, color: S.muted, marginBottom: 10, lineHeight: 1.6 }}>
+                  Kliknij <strong style={{ color: S.coral }}>✕</strong> przy wariancie aby go usunąć. Dodaj własny przez pole poniżej — spacje są OK, zatwierdź <strong style={{ color: S.text }}>Enter</strong>.
+                </div>
+                {/* Auto variants as removable chips */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                  {autoVariants.map((v, i) => (
+                    <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px 3px 11px", borderRadius: 16, fontSize: 11, fontWeight: 700, background: S.green + "18", border: "1px solid " + S.green + "33", color: S.green }}>
+                      {v}
+                      <button onClick={() => setRemovedAutoVariants(prev => new Set([...prev, v]))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: S.green + "99", fontSize: 13, lineHeight: 1, padding: 0, display: "flex", alignItems: "center" }}>✕</button>
+                    </span>
+                  ))}
+                  {/* User custom variants as removable chips */}
+                  {brandVariants.map((v, i) => (
+                    <span key={"c"+i} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px 3px 11px", borderRadius: 16, fontSize: 11, fontWeight: 700, background: S.sky + "18", border: "1px solid " + S.sky + "33", color: S.sky }}>
+                      {v}
+                      <button onClick={() => setBrandVariants(prev => prev.filter(x => x !== v))}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: S.sky + "99", fontSize: 13, lineHeight: 1, padding: 0, display: "flex", alignItems: "center" }}>✕</button>
+                    </span>
+                  ))}
+                  {(removedAutoVariants.size > 0 || brandVariants.length > 0) && (
+                    <button onClick={() => { setRemovedAutoVariants(new Set()); setBrandVariants([]); }}
+                      style={{ padding: "3px 10px", borderRadius: 16, fontSize: 11, background: "transparent", border: "1px solid " + S.border, color: S.muted, cursor: "pointer" }}>
+                      ↺ Reset
+                    </button>
+                  )}
+                </div>
+                {/* Add custom variant input */}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    value={variantInput}
+                    onChange={e => setVariantInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && variantInput.trim()) {
+                        setBrandVariants(prev => [...new Set([...prev, variantInput.trim()])]);
+                        setVariantInput("");
+                      }
+                    }}
+                    placeholder="Wpisz własny wariant i naciśnij Enter (np. Garden Space)"
+                    style={{ flex: 1, background: S.navy1, border: "1px solid " + S.border, borderRadius: 8, padding: "8px 12px", color: S.text, fontSize: 12, outline: "none" }}
+                  />
+                  <button onClick={() => { if (variantInput.trim()) { setBrandVariants(prev => [...new Set([...prev, variantInput.trim()])]); setVariantInput(""); } }}
+                    style={{ padding: "8px 16px", background: S.sky + "18", border: "1px solid " + S.sky + "44", borderRadius: 8, color: S.sky, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    + Dodaj
+                  </button>
+                </div>
+              </Card>
+            )}
             <Card>
               <CLabel>Jak działa parser Ahrefs?</CLabel>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -836,7 +853,7 @@ export default function App() {
                         const cols = [S.sky, S.coral, S.gold, S.purple, "#34d399", S.green];
                         const isActive = brandMentionKey === m;
                         return (
-                          <button key={i} onClick={() => { setBrandMentionKey(isActive ? "" : m); setBrandVariants(isActive ? [] : generateBrandVariants(m)); }}
+                          <button key={i} onClick={() => setBrandMentionKey(isActive ? "" : m)}
                             style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", background: isActive ? cols[i%6] + "33" : cols[i%6] + "12", border: "1px solid " + (isActive ? cols[i%6] : cols[i%6] + "44"), color: cols[i%6] }}>
                             {m}
                           </button>
@@ -844,9 +861,10 @@ export default function App() {
                       })}
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <input value={brandMentionKey} onChange={e => { setBrandMentionKey(e.target.value); setBrandVariants(e.target.value ? generateBrandVariants(e.target.value) : []); }} placeholder="wpisz ręcznie lub wybierz powyżej..."
+                      <input value={brandMentionKey} onChange={e => setBrandMentionKey(e.target.value)}
+                        placeholder="wpisz ręcznie lub wybierz powyżej..."
                         style={{ flex: 1, background: S.navy2, border: "1px solid " + S.border, borderRadius: 8, padding: "8px 12px", color: S.text, fontSize: 12, outline: "none", fontFamily: "monospace" }} />
-                      {brandMentionKey && <button onClick={() => { setBrandMentionKey(""); setBrandVariants([]); }} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + S.border, borderRadius: 8, color: S.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
+                      {brandMentionKey && <button onClick={() => setBrandMentionKey("")} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + S.border, borderRadius: 8, color: S.muted, fontSize: 11, cursor: "pointer" }}>✕ Reset</button>}
                     </div>
                   </div>
                 )}
