@@ -66,18 +66,26 @@ function parseDelimited(text) {
 
 /* ── Platform detection ────────────────────────────────────────────────────── */
 function detectPlatform(headers, rows) {
+  const hLower = headers.map(h => h.toLowerCase());
   if (headers.some(h => h === "AI Overview")) return "ai_overview";
-  if (headers.some(h => h.toLowerCase().includes("ai overview"))) return "ai_overview";
-  if (headers.some(h => h.toLowerCase().includes("ai mode"))) return "ai_mode";
+  if (hLower.some(h => h.includes("ai overview"))) return "ai_overview";
+  if (hLower.some(h => h === "ai mode" || h.includes("ai_mode"))) return "ai_mode";
   const mi = headers.findIndex(h => h === "Model");
   if (mi >= 0) {
-    const model = rows.find(r => r[mi])?.[mi]?.toLowerCase() || "";
-    if (model.includes("chatgpt") || model.includes("gpt")) return "chatgpt";
-    if (model.includes("gemini")) return "gemini";
-    if (model.includes("perplexity")) return "perplexity";
-    if (model.includes("copilot")) return "copilot";
-    if (model.includes("ai mode") || model.includes("aimode")) return "ai_mode";
+    // Check all unique model values in rows (not just first)
+    const models = [...new Set(rows.map(r => (r[mi] || "").toLowerCase()).filter(Boolean))];
+    const modelStr = models.join(" ");
+    if (modelStr.includes("chatgpt") || modelStr.includes("gpt")) return "chatgpt";
+    if (modelStr.includes("gemini")) return "gemini";
+    if (modelStr.includes("perplexity")) return "perplexity";
+    if (modelStr.includes("copilot")) return "copilot";
+    if (modelStr.includes("ai mode") || modelStr.includes("aimode")) return "ai_mode";
   }
+  // Fallback: check if any header IS a platform name
+  if (hLower.some(h => h === "copilot")) return "copilot";
+  if (hLower.some(h => h === "chatgpt")) return "chatgpt";
+  if (hLower.some(h => h === "gemini")) return "gemini";
+  if (hLower.some(h => h === "perplexity")) return "perplexity";
   return null;
 }
 
@@ -114,14 +122,24 @@ function generateBrandVariants(input) {
 }
 
 /* ── Parse Ahrefs buffer ───────────────────────────────────────────────────── */
-function parseAhrefsBuffer(buffer, brandKey, brandVariants) {
+function parseAhrefsBuffer(buffer, brandKey, brandVariants, filename) {
   const text = decodeBuffer(buffer);
   const all = parseDelimited(text);
   if (all.length < 2) return null;
 
   const headers = all[0].map(h => h.replace(/^"|"$/g, "").trim());
   const rows = all.slice(1);
-  const pid = detectPlatform(headers, rows);
+  let pid = detectPlatform(headers, rows);
+  // Fallback: detect from filename
+  if (!pid && filename) {
+    const fn = filename.toLowerCase();
+    if (fn.includes("ai_mode") || fn.includes("ai-mode") || fn.includes("aimode")) pid = "ai_mode";
+    else if (fn.includes("ai_overview") || fn.includes("overview")) pid = "ai_overview";
+    else if (fn.includes("chatgpt") || fn.includes("chat_gpt")) pid = "chatgpt";
+    else if (fn.includes("gemini")) pid = "gemini";
+    else if (fn.includes("perplexity")) pid = "perplexity";
+    else if (fn.includes("copilot")) pid = "copilot";
+  }
 
   const mentionsIdx = headers.findIndex(h => h === "Mentions");
   const linkIdx = headers.findIndex(h => h === "Link URL");
@@ -400,13 +418,14 @@ function buildReport(args) {
     '<h2><span class="num">&#9733;</span> Komentarz analityczny</h2>',
     '<div class="comment-box">',
     '<div class="comment-title">Podsumowanie widoczności AI</div>',
-    "<p>Niniejszy raport przedstawia wyniki analizy widoczności marki <strong>" + (brand.name || "klienta") + "</strong> w odpowiedziach generowanych przez modele AI. Analiza obejmuje <strong>" + totalQ.toLocaleString("pl-PL") + " zapytan</strong> na platformach: AI Overview, AI Mode, ChatGPT, Gemini, Perplexity i Copilot.</p>",
+    '<div style="background:#fff8e6;border:1px solid #f5c842;border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:11px;color:#7a6000;line-height:1.5">⚠️ <strong>Uwaga:</strong> Komentarz analityczny i rekomendacje zostały wygenerowane automatycznie na podstawie danych liczbowych. Przed przekazaniem klientowi zweryfikuj czy wnioski odpowiadają specyfice jego branży i strategii.</div>',
+    "<p>Niniejszy raport przedstawia wyniki analizy widoczności marki <strong>" + (brand.name || "klienta") + "</strong> w odpowiedziach generowanych przez modele AI. Analiza obejmuje <strong>" + totalQ.toLocaleString("pl-PL") + " zapytań</strong> na platformach: AI Overview, AI Mode, ChatGPT, Gemini, Perplexity i Copilot.</p>",
     // SOV paragraph - contextual
     (avgSOV >= 30
       ? "<p><strong>AI Share of Voice " + avgSOV + "%</strong> to wynik dobry — marka wymieniana jest w ponad co trzecim przypadku, gdy temat dotyczy branzy. Koncentracja na utrzymaniu i ekspansji na slabsze platformy.</p>"
       : avgSOV >= 10
-        ? "<p><strong>AI Share of Voice " + avgSOV + "%</strong> (srednio " + avgSOV + " na 100 zapytan, gdzie pojawia sie jakakolwiek marka z branzy) wskazuje na umiarkowana widocznosc. Glowna dzwignia wzrostu: tworzenie treści odpowiadajacych bezposrednio na zapytania uzytkownikow — szczegolnie FAQ, porownania i how-to." + (allComps.length > 0 ? " Glowni konkurenci w danych: " + allComps.slice(0, 3).join(", ") + "." : "") + "</p>"
-        : "<p><strong>AI Share of Voice " + avgSOV + "%</strong> — marka pojawia sie rzadko w odpowiedziach AI" + (totalM > 0 ? " (" + totalM + " na " + totalQ.toLocaleString("pl-PL") + " zapytan)" : "") + ". Na tym etapie kluczowe jest zbudowanie podstaw: entity recognition (Wikipedia, Wikidata, bazy branzowe), systematyczny content pod zapytania branzowe i structured data." + (allComps.length > 0 ? " Dla porownania: " + allComps[0] + " pojawia sie " + compCounts[allComps[0]] + "x w tych samych danych." : "") + "</p>"),
+        ? "<p><strong>AI Share of Voice " + avgSOV + "%</strong> (średnio " + avgSOV + " na 100 zapytan, gdzie pojawia się jakakolwiek marka z branży) wskazuje na umiarkowaną widoczność. Główna dźwignia wzrostu: tworzenie treści odpowiadających bezpośrednio na zapytania użytkowników — szczegolnie FAQ, porównania i how-to." + (allComps.length > 0 ? " Główni konkurenci w danych: " + allComps.slice(0, 3).join(", ") + "." : "") + "</p>"
+        : "<p><strong>AI Share of Voice " + avgSOV + "%</strong> — marka pojawia się rzadko w odpowiedziach AI" + (totalM > 0 ? " (" + totalM + " na " + totalQ.toLocaleString("pl-PL") + " zapytań)" : "") + ". Na tym etapie kluczowe jest zbudowanie podstaw: entity recognition (Wikipedia, Wikidata, bazy branżowe), systematyczny content pod zapytania branżowe i structured data." + (allComps.length > 0 ? " Dla porównania: " + allComps[0] + " pojawia się " + compCounts[allComps[0]] + "x w tych samych danych." : "") + "</p>"),
     // Mentions vs Citations smart paragraph
     (() => {
       const mTot = totalM; const cTot = totalC;
@@ -414,11 +433,11 @@ function buildReport(args) {
       if (mTot === 0 && cTot === 0) return "<p>W analizowanych zapytaniach AI nie odnotowano ani wzmianek nazwy marki, ani cytowan strony. Moze to oznaczac: (1) zapytania nie sa typowe dla tej marki, (2) marka nie ma jeszcze rozpoznawalnosci w AI, lub (3) klucz marki wymaga kalibracji. Zalecamy przeglad sekcji Import i dostosowanie klucza dopasowania.</p>";
       if (mTot === 0 && cTot > 0) return "<p><strong>Uwaga diagnostyczna:</strong> Strona jest cytowana przez AI jako zrodlo (" + cTot + "x) ale nie jest wymieniana z nazwy. To typowy pattern 'anonimowego eksperta' — AI ufa tresciom, ale nie identyfikuje marki. Rozwiazanie: dodaj branding signals w tresciach (nazwa marki w nagłowkach, About Us, Wikipedia), zbuduj wzmianki w mediach branzowych.</p>";
       if (ratio !== null && ratio > 8) return "<p><strong>Dysproporcja cytowania vs wzmianki: " + cTot + " cyt. vs " + mTot + " wzm.</strong> To nie jest zdrowa korelacja — oznacza, ze AI uzywamy strony jako zrodla danych, ale nie utossamia jej z marka. Priorytet: budowanie entity graph — Wikidata, Wikipedia, wzmianki z linkiem w mediach, anchor texty z nazwa marki.</p>";
-      if (ratio !== null && ratio < 0.15 && mTot >= 5) return "<p><strong>Wzmianki (" + mTot + ") bez cytowania (" + cTot + ")</strong> — AI kojarzy marke, ale nie poleca jej strony bezposrednio. Priorytet techniczny: structured data (schema.org), poprawa Core Web Vitals, wewnetrzne linkowanie kluczowych stron.</p>";
-      return "<p><strong>Mentions: " + mTot + " | Citations: " + cTot + "</strong> — obie metryki potwierdzaja obecnosc marki. Nasteony krok: zwiekszenie czestotliwosci przez konsekwentny content plan (min. 2-4 artykulow miesiecznie pod zapytania z niskim SOV).</p>";
+      if (ratio !== null && ratio < 0.15 && mTot >= 5) return "<p><strong>Wzmianki (" + mTot + ") bez cytowania (" + cTot + ")</strong> — AI kojarzy marke, ale nie poleca jej strony bezpośrednio. Priorytet techniczny: structured data (schema.org), poprawa Core Web Vitals, wewnetrzne linkowanie kluczowych stron.</p>";
+      return "<p><strong>Mentions: " + mTot + " | Citations: " + cTot + "</strong> — obie metryki potwierdzają obecność marki. Następny krok: zwiększenie częstotliwości przez konsekwentny content plan (min. 2-4 artykułów miesiecznie pod zapytania z niskim SOV).</p>";
     })(),
     // Platforms paragraph
-    (best ? "<p><strong>Najlepsza platforma: " + best.platform + "</strong> (SOV " + best.sov + "%). " + (best.sov < 10 ? "Mimo ze jest najlepsza, SOV ponizej 10% to nadal poczatkowy etap — jest duzo miejsca na wzrost." : best.sov < 30 ? "Solidna baza do budowania dalszej widocznosci." : "Silna pozycja do utrzymania.") + (worst && worst !== best && worst.sov === 0 ? " Platforma " + worst.platform + " wymaga osobnej strategii — marka jest calkowicie nieobecna mimo posiadania danych." : worst && worst !== best ? " Najslabsza platforma: " + worst.platform + " (SOV " + worst.sov + "%) — warto przygotowac tresc w formatach preferowanych przez ten model." : "") + "</p>" : ""),
+    (best ? "<p><strong>Najlepsza platforma: " + best.platform + "</strong> (SOV " + best.sov + "%). " + (best.sov < 10 ? "Mimo że jest najlepsza, SOV poniżej 10% to nadal poczatkowy etap — jest dużo miejsca na wzrost." : best.sov < 30 ? "Solidna baza do budowania dalszej widoczności." : "Silna pozycja do utrzymania.") + (worst && worst !== best && worst.sov === 0 ? " Platforma " + worst.platform + " wymaga osobnej strategii — marka jest całkowicie nieobecna mimo posiadania danych." : worst && worst !== best ? " Najsłabsza platforma: " + worst.platform + " (SOV " + worst.sov + "%) — warto przygotować treść w formatach preferowanych przez ten model." : "") + "</p>" : ""),
     "<p><strong>Priorytety na 3-6 miesiecy:</strong> (1) " + (totalM === 0 && totalC > 0 ? "Zbudowanie entity recognition — Wikipedia/Wikidata, wzmianki w mediach z nazwa marki." : "Tworzenie tresci FAQ i how-to pod zapytania z najnizszym SOV.") + " (2) Wdrozenie schema markup (Organization, BreadcrumbList, FAQPage). (3) " + (allComps.length > 0 && compCounts[allComps[0]] > totalM ? "Analiza gap contentowego wzgledem " + allComps[0] + " (" + compCounts[allComps[0]] + " wzm.)." : "Regularne monitorowanie widocznosci i optymalizacja na biezaco.") + "</p>",
     "</div>",
     "</section>",
@@ -472,7 +491,7 @@ function buildReport(args) {
 
 /* ── MAIN APP ──────────────────────────────────────────────────────────────── */
 export default function App() {
-  const [tab, setTab] = useState("setup");
+  const [tab, setTab] = useState("guide");
   const [brand, setBrand] = useState({ name: "", url: "", industry: "" });
   const [parsedData, setParsedData] = useState({});
   const [loadedFiles, setLoadedFiles] = useState({});
@@ -504,7 +523,7 @@ export default function App() {
     const mergedHits = {};
     Object.entries(rawBuffers).forEach(([, buf]) => {
       try {
-        const r = parseAhrefsBuffer(buf, brandKey, variantsInUse);
+        const r = parseAhrefsBuffer(buf, brandKey, variantsInUse, fname);
         if (r?.platformId) {
           next[r.platformId] = aggregatePlatform(r.rows, r.variantHits);
           Object.entries(r.variantHits || {}).forEach(([v, c]) => {
@@ -521,7 +540,7 @@ export default function App() {
 
   const handleFiles = (filename, buffer) => {
     try {
-      const result = parseAhrefsBuffer(buffer, brandKey, variantsInUse);
+      const result = parseAhrefsBuffer(buffer, brandKey, variantsInUse, filename);
       if (!result || !result.platformId) {
         setErrors(e => [...e, "Nie rozpoznano platformy w pliku: " + filename]);
         return;
@@ -664,11 +683,11 @@ export default function App() {
     return [
       "Jestes ekspertem ds. AI Visibility. Przygotuj raport w jezyku polskim jako .docx.",
       "",
-      "KLIENT: " + (brand.name || "[KLIENT]") + " | URL: " + (brand.url || "-") + " | Branza: " + (brand.industry || "-"),
+      "KLIENT: " + (brand.name || "[KLIENT]") + " | URL: " + (brand.url || "-") + " | Branża: " + (brand.industry || "-"),
       "KONKURENCI (wykryci z danych): " + (compStr || "brak"),
       "",
       "WYNIKI:",
-      "SOV: " + avgSOV + "% | Mentions: " + visM + "% | Citations: " + visC + "% | Zapytan: " + totalQ,
+      "SOV: " + avgSOV + "% | Mentions: " + visM + "% | Citations: " + visC + "% | Zapytań: " + totalQ,
       pRows,
       best ? "Najlepsza: " + best.platform + " SOV " + best.sov + "%" : "",
       worst && worst !== best ? "| Do poprawy: " + worst.platform + " SOV " + worst.sov + "%" : "",
@@ -679,13 +698,14 @@ export default function App() {
       "3. Visibility Score Mentions (3)",
       "4. Visibility Score Citations (4)",
       "5. Analiza konkurencji (3)",
-      "6. Komentarz calosci: mocne strony x3, obszary do poprawy x3, strategia 3-6 mies. (5)",
+      "6. Komentarz całościowy: mocne strony x3, obszary do poprawy x3, strategia 3-6 mies. (5)",
       "",
-      "Jezyk: polski | kazdy wniosek = konkretna liczba | porownania do konkurentow",
+      "Jezyk: polski | kazdy wniosek = konkretna liczba | porównania do konkurentow",
     ].filter(x => x !== undefined).join("\n");
   };
 
   const TABS = [
+    { id: "guide", label: "⓪ Instrukcja" },
     { id: "setup", label: "① Klient" },
     { id: "import", label: "② Import CSV" },
     { id: "dashboard", label: "③ Dashboard" },
@@ -718,6 +738,138 @@ export default function App() {
       </div>
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "30px 28px 60px" }}>
+
+        {/* GUIDE */}
+        {tab === "guide" && (
+          <div>
+            <STitle>Jak korzystać z narzędzia</STitle>
+
+            {/* What is this */}
+            <div style={{ background: "linear-gradient(135deg," + S.navy2 + "," + S.navy3 + ")", border: "1px solid " + S.green + "33", borderRadius: 14, padding: "24px 28px", marginBottom: 24, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, borderRadius: "50%", background: S.green + "08" }} />
+              <div style={{ fontSize: 11, color: S.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10 }}>Co to jest?</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: S.text, marginBottom: 12, lineHeight: 1.4 }}>AI Visibility Report Generator analizuje jak często marka pojawia się w odpowiedziach AI</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+                {[
+                  { icon: "🔍", title: "Mentions", desc: "Ile razy AI wymienia markę z nazwy w odpowiedzi na zapytania branżowe" },
+                  { icon: "🔗", title: "Citations", desc: "Ile razy AI cytuje stronę marki jako źródło w odpowiedzi" },
+                  { icon: "📊", title: "AI Share of Voice", desc: "Jaki % przestrzeni AI zajmuje marka vs konkurenci w tej samej kategorii" },
+                ].map((x, i) => (
+                  <div key={i} style={{ background: S.navy1, borderRadius: 10, padding: "14px 16px", border: "1px solid " + S.border }}>
+                    <div style={{ fontSize: 22, marginBottom: 8 }}>{x.icon}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: S.text, marginBottom: 4 }}>{x.title}</div>
+                    <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.6 }}>{x.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Step by step Ahrefs */}
+            <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ background: S.sky + "22", color: S.sky, borderRadius: 6, padding: "2px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px" }}>Krok po kroku</span>
+              Jak pobrać dane z Ahrefs
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
+              {/* Step 1 */}
+              <div style={{ display: "flex", gap: 16, padding: "18px 20px", background: S.navy2, border: "1px solid " + S.border, borderRadius: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: S.sky + "22", border: "2px solid " + S.sky + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: S.sky, flexShrink: 0 }}>1</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 6 }}>Otwórz Ahrefs → sekcja <span style={{ color: S.sky }}>AI visibility → AI responses</span></div>
+                  <div style={{ fontSize: 12, color: S.muted, lineHeight: 1.7, marginBottom: 10 }}>W lewym menu kliknij <strong style={{ color: S.text }}>AI visibility</strong>, następnie <strong style={{ color: S.text }}>AI responses</strong>. Upewnij się że masz wybrany właściwy projekt i kraj (np. Poland).</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: S.navy1, borderRadius: 8, fontSize: 11, color: S.muted }}>
+                    <span style={{ fontSize: 14 }}>💡</span> Tu widzisz wszystkie odpowiedzi AI na zapytania branżowe dla Twojej domeny
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div style={{ display: "flex", gap: 16, padding: "18px 20px", background: S.navy2, border: "1px solid " + S.border, borderRadius: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: S.green + "22", border: "2px solid " + S.green + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: S.green, flexShrink: 0 }}>2</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 6 }}>Wybierz platformę AI z filtra</div>
+                  <div style={{ fontSize: 12, color: S.muted, lineHeight: 1.7, marginBottom: 10 }}>W górnym filtrze kliknij nazwę platformy (np. <strong style={{ color: S.text }}>Copilot</strong>, <strong style={{ color: S.text }}>ChatGPT</strong>, <strong style={{ color: S.text }}>Gemini</strong> itd.). Eksportuj każdą platformę osobno.</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[
+                      { name: "AI Overview", color: S.sky },
+                      { name: "AI Mode", color: "#34d399" },
+                      { name: "ChatGPT", color: S.green },
+                      { name: "Gemini", color: S.coral },
+                      { name: "Perplexity", color: S.purple },
+                      { name: "Copilot", color: S.gold },
+                    ].map((p, i) => (
+                      <span key={i} style={{ padding: "3px 12px", borderRadius: 14, fontSize: 11, fontWeight: 700, background: p.color + "18", border: "1px solid " + p.color + "44", color: p.color }}>{p.name}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div style={{ display: "flex", gap: 16, padding: "18px 20px", background: S.navy2, border: "1px solid " + S.border, borderRadius: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: S.coral + "22", border: "2px solid " + S.coral + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: S.coral, flexShrink: 0 }}>3</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 6 }}>Kliknij <span style={{ color: S.coral }}>Export</span> → pobierz jako CSV</div>
+                  <div style={{ fontSize: 12, color: S.muted, lineHeight: 1.7, marginBottom: 10 }}>W prawym górnym rogu kliknij przycisk <strong style={{ color: S.text }}>Export</strong>. Wybierz format CSV. Ahrefs eksportuje domyślnie w formacie UTF-16 z separatorem TAB — to jest OK, narzędzie obsługuje oba formaty automatycznie.</div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ padding: "8px 12px", background: S.navy1, borderRadius: 8, fontSize: 11, color: S.muted, border: "1px solid " + S.border }}>
+                      <span style={{ color: S.green }}>✓</span> UTF-16 (domyślny Ahrefs)
+                    </div>
+                    <div style={{ padding: "8px 12px", background: S.navy1, borderRadius: 8, fontSize: 11, color: S.muted, border: "1px solid " + S.border }}>
+                      <span style={{ color: S.green }}>✓</span> UTF-8 (też działa)
+                    </div>
+                    <div style={{ padding: "8px 12px", background: S.navy1, borderRadius: 8, fontSize: 11, color: S.muted, border: "1px solid " + S.border }}>
+                      <span style={{ color: S.green }}>✓</span> Separator TAB lub przecinek
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div style={{ display: "flex", gap: 16, padding: "18px 20px", background: S.navy2, border: "1px solid " + S.border, borderRadius: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: S.gold + "22", border: "2px solid " + S.gold + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: S.gold, flexShrink: 0 }}>4</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 6 }}>Powtórz dla każdej platformy → wgraj wszystko naraz</div>
+                  <div style={{ fontSize: 12, color: S.muted, lineHeight: 1.7, marginBottom: 10 }}>Zbierz pliki CSV dla wszystkich dostępnych platform. W kroku <strong style={{ color: S.text }}>② Import CSV</strong> możesz upuścić wszystkie pliki jednocześnie — narzędzie automatycznie wykryje która platforma to który plik.</div>
+                  <div style={{ padding: "10px 14px", background: S.gold + "0a", border: "1px solid " + S.gold + "33", borderRadius: 8, fontSize: 11, color: S.muted, lineHeight: 1.7 }}>
+                    <strong style={{ color: S.gold }}>Wskazówka:</strong> Nie musisz mieć wszystkich 6 platform. Brakująca platforma = wynik 0, ale reszta wykreśli się normalnie.
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 5 */}
+              <div style={{ display: "flex", gap: 16, padding: "18px 20px", background: S.navy2, border: "1px solid " + S.green + "44", borderRadius: 12, alignItems: "flex-start" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: S.green + "22", border: "2px solid " + S.green + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: S.green, flexShrink: 0 }}>5</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 6 }}>Ustaw nazwę klienta i gotowe 🚀</div>
+                  <div style={{ fontSize: 12, color: S.muted, lineHeight: 1.7 }}>W kroku <strong style={{ color: S.text }}>① Klient</strong> wpisz nazwę marki i jej domenę (np. <code style={{ background: S.navy1, padding: "1px 6px", borderRadius: 4, color: S.green }}>gardenspace.pl</code>). System automatycznie wykryje wzmianki, wyliczy wskaźniki i wygeneruje raport gotowy do wysłania klientowi.</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Glossary */}
+            <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 14 }}>Słowniczek wskaźników</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 28 }}>
+              {[
+                { term: "AI Share of Voice (SOV)", color: S.green, def: "% wzmianek marki wśród wszystkich marek pojawiających się w odpowiedziach AI na te same zapytania. Im wyższy, tym marka jest częściej wymieniana od konkurentów." },
+                { term: "Mention Rate", color: S.sky, def: "% zapytań, w których AI wymienia markę z nazwy. 5% = marka pojawia się w 1 na 20 analizowanych zapytań." },
+                { term: "Citation Rate", color: S.purple, def: "% zapytań, w których AI cytuje stronę marki jako źródło. Wysoka wartość bez wysokiego Mention Rate = 'anonimowy ekspert'." },
+                { term: "Presence Score", color: S.coral, def: "Połączony wskaźnik: Mentions + Citations × 0.5. Pokazuje ogólną obecność w AI, nawet gdy marka jest cytowana ale nie wymieniana z nazwy." },
+                { term: "Quick Wins", color: S.gold, def: "Szanse na szybką poprawę wyników — oparte na analizie dysproporcji między wskaźnikami i porównaniu z konkurentami." },
+                { term: "Brand Variants", color: "#34d399", def: "Warianty nazwy marki sprawdzane w danych (np. 'gardenspace', 'garden space'). Możesz dodać własne jeśli AI używa innej formy nazwy." },
+              ].map((x, i) => (
+                <div key={i} style={{ padding: "14px 16px", background: S.navy2, border: "1px solid " + x.color + "22", borderRadius: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: x.color, marginBottom: 5 }}>{x.term}</div>
+                  <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.6 }}>{x.def}</div>
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => setTab("setup")}
+              style={{ padding: "12px 28px", background: S.green + "18", border: "1px solid " + S.green + "55", borderRadius: 10, color: S.green, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              Zaczynamy → ① Klient
+            </button>
+          </div>
+        )}
 
         {/* SETUP */}
         {tab === "setup" && (
@@ -953,24 +1105,32 @@ export default function App() {
           <div>
             <STitle>Dashboard Widoczności AI</STitle>
             <Card style={{ marginBottom: 18 }}>
-              <CLabel>◈ AI Signal Scanner</CLabel>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: S.muted, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", marginBottom: 4 }}>◈ AI Signal Scanner</div>
+                  <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>
+                    Każde koło = jedna platforma AI. <strong style={{ color: S.text }}>% w środku</strong> = Mention Rate (ile zapytań kończy się wzmianką marki). Świecące = dane wgrane, blade = brak danych.
+                  </div>
+                </div>
+              </div>
               <SignalScanner proc={proc} />
             </Card>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
               {[
-                { label: "AI Share of Voice", value: fmtPctSimple(avgSOV), color: S.green, sub: "Średnia SOV" },
-                { label: "Presence Score", value: fmtPct(totalPresence, totalQ), color: S.sky, sub: "Mentions + Citations" },
-                { label: "Mention Rate", value: fmtPct(visM, totalQ), color: S.purple, sub: totalM + " na " + totalQ + " zap." },
-                { label: "Citation Rate", value: fmtPct(visC, totalQ), color: S.coral, sub: totalC + " na " + totalQ + " zap." },
+                { label: "AI Share of Voice", value: fmtPctSimple(avgSOV), color: S.green, sub: totalM + " wzm. / " + totalQ + " zap.", desc: "Udział marki wśród wszystkich marek wymienianych przez AI — im wyższy, tym częściej marka pojawia się zamiast konkurentów." },
+                { label: "Presence Score", value: fmtPct(totalPresence, totalQ), color: S.sky, sub: "Mentions + Citations×0.5", desc: "Ogólna obecność w AI: łączy wzmianki nazwy i cytowania strony. Pokazuje śledź nawet gdy AI cytuje bez wymienienia nazwy." },
+                { label: "Mention Rate", value: fmtPct(visM, totalQ), color: S.purple, sub: totalM + " na " + totalQ + " zap.", desc: "% zapytań, w których AI wymienia markę z nazwy. Bezpośrednia miara rozpoznawalności marki przez modele AI." },
+                { label: "Citation Rate", value: fmtPct(visC, totalQ), color: S.coral, sub: totalC + " na " + totalQ + " zap.", desc: "% zapytań, w których AI cytuje stronę jako źródło. Miara autorytetu technicznego domeny w oczach AI." },
               ].map((k, i) => (
                 <div key={i} style={{ background: S.navy2, border: "1px solid " + k.color + "1a", borderRadius: 12, padding: "18px 16px", position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: k.color + "0b" }} />
-                  <div style={{ fontSize: 9, color: S.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>{k.label}</div>
-                  <div style={{ fontSize: 32, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.value}</div>
-                  <div style={{ fontSize: 9, color: "#233550", marginTop: 5 }}>{k.sub}</div>
+                  <div style={{ fontSize: 9, color: S.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 6 }}>{k.label}</div>
+                  <div style={{ fontSize: 30, fontWeight: 900, color: k.color, lineHeight: 1, marginBottom: 4 }}>{k.value}</div>
+                  <div style={{ fontSize: 10, color: S.muted, marginBottom: 6 }}>{k.sub}</div>
+                  <div style={{ fontSize: 10, color: "#2a4060", lineHeight: 1.5, borderTop: "1px solid " + S.border, paddingTop: 6 }}>{k.desc}</div>
                   {typeof k.value === "string" && k.value.endsWith("%") && (
-                    <div style={{ marginTop: 10, height: 4, background: S.navy4, borderRadius: 2, overflow: "visible", position: "relative" }}>
+                    <div style={{ marginTop: 8, height: 3, background: S.navy4, borderRadius: 2, overflow: "visible", position: "relative" }}>
                       <div style={{ width: "calc(max(" + (parseFloat(k.value)||0) + "%, " + (k.value !== "0%" ? "3px" : "0px") + "))", height: "100%", background: k.color, borderRadius: 2, minWidth: k.value !== "0%" ? 4 : 0 }} />
                     </div>
                   )}
@@ -1113,6 +1273,10 @@ export default function App() {
             {/* OPPORTUNITIES */}
             <Card style={{ marginBottom: 14, border: "1px solid " + S.gold + "33", background: S.navy2 }}>
               <CLabel>⚡ Opportunities — Quick Wins</CLabel>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", background: S.gold + "08", border: "1px solid " + S.gold + "22", borderRadius: 8, marginBottom: 14, fontSize: 11, color: S.muted, lineHeight: 1.5 }}>
+                <span style={{ color: S.gold, flexShrink: 0, marginTop: 1 }}>⚠️</span>
+                <span><strong style={{ color: S.gold }}>Sugestie do ręcznej weryfikacji.</strong> Rekomendacje są generowane automatycznie na podstawie danych liczbowych — przed wdrożeniem sprawdź czy odpowiadają specyfice branży i strategii klienta.</span>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {(() => {
                   const ops = [];
@@ -1171,6 +1335,10 @@ export default function App() {
 
             <Card>
               <CLabel>✦ Spostrzeżenia — co to znaczy i co robić</CLabel>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", background: S.muted + "0a", border: "1px solid " + S.border, borderRadius: 8, marginBottom: 12, fontSize: 10, color: S.muted, lineHeight: 1.5 }}>
+                <span style={{ flexShrink: 0 }}>ℹ️</span>
+                <span>Wnioski generowane automatycznie z danych. Kontekst branżowy i strategiczny wymaga ręcznej oceny przed przekazaniem klientowi.</span>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {/* SOV insight */}
                 {best && (
@@ -1216,6 +1384,35 @@ export default function App() {
                 })()}
               </div>
             </Card>
+            {/* Definitions footer */}
+            <div style={{ marginTop: 28, paddingTop: 24, borderTop: "1px solid " + S.border }}>
+              <div style={{ fontSize: 11, color: S.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.2px", marginBottom: 14 }}>Słownik wskaźników</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                {[
+                  { term: "AI Share of Voice (SOV)", color: S.green, icon: "📊",
+                    def: "Procent wzmianek marki wśród sumy wzmianek wszystkich marek z tej samej kategorii w odpowiedziach AI. SOV 30% = na każde 10 wzmianek marek w branży, 3 dotyczą tej marki." },
+                  { term: "Presence Score", color: S.sky, icon: "📡",
+                    def: "Łączony wskaźnik obecności: (wzmianki + cytowania × 0.5) / zapytania. Wyższy niż Mention Rate — pokazuje obecność nawet gdy AI cytuje stronę bez wymienienia nazwy marki." },
+                  { term: "Mention Rate", color: S.purple, icon: "💬",
+                    def: "% zapytań zakończonych wzmianką nazwy marki. 1% = marka wymieniana w 1 na 100 zapytań. Kluczowy wskaźnik rozpoznawalności przez AI — rośnie dzięki content marketingowi." },
+                  { term: "Citation Rate", color: S.coral, icon: "🔗",
+                    def: "% zapytań, w których AI cytuje stronę jako źródło. Rośnie przez structured data, E-E-A-T i autorytet domeny. Wysoka wartość przy niskim Mention Rate = 'anonimowy ekspert'." },
+                  { term: "Quick Win / Opportunity", color: S.gold, icon: "⚡",
+                    def: "Szansa wykryta automatycznie z dysproporcji między wskaźnikami lub luki vs konkurencja. Sugestia — wymaga weryfikacji kontekstu branżowego przed wdrożeniem." },
+                  { term: "Brand Variant", color: "#34d399", icon: "🔍",
+                    def: "Wariant nazwy marki sprawdzany w kolumnie Mentions. Ahrefs zapisuje nazwy marki tak, jak AI je wymienia — może to być skrót, domena lub inna forma niż oficjalna nazwa." },
+                ].map((x, i) => (
+                  <div key={i} style={{ padding: "12px 14px", background: S.navy2, border: "1px solid " + x.color + "18", borderRadius: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                      <span style={{ fontSize: 14 }}>{x.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: x.color }}>{x.term}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.6 }}>{x.def}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <Btn onClick={() => setTab("report")} style={{ marginTop: 22 }}>Generuj Raport →</Btn>
           </div>
         )}
