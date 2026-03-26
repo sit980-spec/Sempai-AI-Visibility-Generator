@@ -366,8 +366,7 @@ export default function App() {
   const filesLoaded=Object.keys(files).length;
 
   const buildArgs=()=>({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,allComps,compCounts,best,worst,topBrandKws,topGapKws,editableComment,totalCompM,finalComment:null});
-  const openReport=()=>{const html=buildReportHTML(buildArgs());window.open(URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"})),"_blank");};
-  const downloadReport=()=>{const html=buildReportHTML(buildArgs());const a=document.createElement("a");a.href="data:text/html;charset=utf-8,"+encodeURIComponent(html);a.download="Sempai_AIVisibility_"+(brand.name||"Raport")+"_"+new Date().toISOString().slice(0,10)+".html";a.click();};
+
 
   const TABS=[{id:"guide",label:"⓪ Jak używać"},{id:"setup",label:"① Klient"},{id:"import",label:"② Import CSV"},{id:"dashboard",label:"③ Dashboard"},{id:"report",label:"④ Raport"},{id:"prompt",label:"⑤ Prompt AI"}];
 
