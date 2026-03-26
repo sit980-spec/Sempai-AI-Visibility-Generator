@@ -827,7 +827,6 @@ export default function App() {
               {sectionDefs.map(s=>{
                 const isOk = s.ok !== false;
                 const checked = reportChecks[s.id]===true;
-                const isEditing = false; // controlled by textarea focus
                 return (
                   <div key={s.id} style={{borderRadius:12,border:"2px solid "+(checked?s.color+"66":isOk?s.color+"22":S.border),background:checked?s.color+"08":S.navy2,transition:"all .2s",opacity:isOk?1:0.45}}>
                     {/* Section header */}
