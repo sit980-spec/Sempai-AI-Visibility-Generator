@@ -261,9 +261,12 @@ function buildReport(args) {
   const rows = PLATFORMS.map(p => {
     const d = proc[p.id];
     const allM = d.mentions + allComps.reduce((s, c) => s + (d.compSet[c] || 0), 0);
-    const sov = allM > 0 ? Math.round((d.mentions / allM) * 100) : 0;
-    const mR = d.total > 0 ? Math.round((d.mentions / d.total) * 100) : 0;
-    const cR = d.total > 0 ? Math.round((d.citations / d.total) * 100) : 0;
+    const sovR = allM > 0 ? (d.mentions / allM) * 100 : 0;
+    const sov = sovR < 1 && sovR > 0 ? Math.round(sovR * 10) / 10 : Math.round(sovR);
+    const mRr = d.total > 0 ? (d.mentions / d.total) * 100 : 0;
+    const mR = mRr < 1 && mRr > 0 ? Math.round(mRr * 10) / 10 : Math.round(mRr);
+    const cRr = d.total > 0 ? (d.citations / d.total) * 100 : 0;
+    const cR = cRr < 1 && cRr > 0 ? Math.round(cRr * 10) / 10 : Math.round(cRr);
     return { ...p, ...d, sov, mR, cR };
   });
 
@@ -483,24 +486,63 @@ export default function App() {
   const totalQ = PLATFORMS.reduce((s, p) => s + (proc[p.id].total || 0), 0);
   const totalM = PLATFORMS.reduce((s, p) => s + (proc[p.id].mentions || 0), 0);
   const totalC = PLATFORMS.reduce((s, p) => s + (proc[p.id].citations || 0), 0);
-  const visM = totalQ > 0 ? Math.round((totalM / totalQ) * 100) : 0;
-  const visC = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
+  const fmtPct = v => v === 0 ? "0%" : (v < 1 ? v.toFixed(1) + "%" : v + "%");
+  const pct = (num, den) => {
+    if (den === 0) return 0;
+    const v = (num / den) * 100;
+    if (v === 0) return 0;
+    if (v < 0.1) return 0.1;
+    if (v < 1) return Math.round(v * 10) / 10;
+    return Math.round(v);
+  };
+  const visM = pct(totalM, totalQ);
+  const visC = pct(totalC, totalQ);
 
   const sovData = PLATFORMS.map(p => {
     const d = proc[p.id];
     const allM = d.mentions + allComps.reduce((s, c) => s + (d.compSet[c] || 0), 0);
-    return { platform: p.short, color: p.color, sov: allM > 0 ? Math.round((d.mentions / allM) * 100) : 0, mentions: d.mentions, citations: d.citations, total: d.total };
+    const sovRaw = allM > 0 ? (d.mentions / allM) * 100 : 0;
+    const sov = sovRaw < 1 && sovRaw > 0 ? Math.round(sovRaw * 10) / 10 : Math.round(sovRaw);
+    const presRaw = d.total > 0 ? ((d.mentions + d.citations * 0.5) / d.total) * 100 : 0;
+    const presence = presRaw < 0.1 ? 0 : presRaw < 1 ? Math.round(presRaw * 10) / 10 : Math.round(presRaw);
+    return { platform: p.short, color: p.color, sov, mentions: d.mentions, citations: d.citations, total: d.total, presence };
   });
 
   const active = sovData.filter(d => d.total > 0);
-  const avgSOV = active.length > 0 ? Math.round(active.reduce((s, d) => s + d.sov, 0) / active.length) : 0;
+  const avgSOVraw = active.length > 0 ? active.reduce((s, d) => s + d.sov, 0) / active.length : 0;
+  const avgSOV = avgSOVraw < 1 && avgSOVraw > 0 ? Math.round(avgSOVraw * 10) / 10 : Math.round(avgSOVraw);
   const ranked = [...active].sort((a, b) => b.sov - a.sov);
   const best = ranked[0], worst = ranked[ranked.length - 1];
 
+  const totalPresRaw = totalQ > 0 ? ((totalM + totalC * 0.5) / totalQ) * 100 : 0;
+  const totalPresence = totalPresRaw < 0.1 ? 0 : totalPresRaw < 1 ? Math.round(totalPresRaw * 10) / 10 : Math.round(totalPresRaw);
+
+  const quickWins = [];
+  PLATFORMS.forEach(p => {
+    const d = proc[p.id]; if (!d.total) return;
+    const mR = (d.mentions / d.total) * 100;
+    const cR = (d.citations / d.total) * 100;
+    if (d.citations > 0 && d.mentions === 0)
+      quickWins.push({ type: "cited", platform: p, cR: Math.round(cR * 10) / 10 });
+    else if (mR > 0 && mR < 15 && d.total >= 5)
+      quickWins.push({ type: "low_mention", platform: p, mR: Math.round(mR * 10) / 10, cR: Math.round(cR * 10) / 10 });
+    const platSOV = sovData.find(s => s.platform === p.short)?.sov || 0;
+    if (platSOV > 0 && platSOV < 25 && mR > 0)
+      quickWins.push({ type: "low_sov", platform: p, sov: platSOV });
+  });
+  const topComp = allComps[0];
+  if (topComp && compCounts[topComp] > totalM && totalM > 0)
+    quickWins.push({ type: "comp_gap", comp: topComp, compCount: compCounts[topComp], brandCount: totalM });
+  const seen = new Set();
+  const topQW = quickWins.filter(w => {
+    const k = (w.platform?.id || "g") + w.type;
+    if (seen.has(k)) return false; seen.add(k); return true;
+  }).slice(0, 5);
+
   const radarData = PLATFORMS.map(p => ({
     platform: p.short,
-    Wzmianki: proc[p.id].total > 0 ? Math.round((proc[p.id].mentions / proc[p.id].total) * 100) : 0,
-    Cytowania: proc[p.id].total > 0 ? Math.round((proc[p.id].citations / proc[p.id].total) * 100) : 0,
+    Wzmianki: proc[p.id].total > 0 ? parseFloat(((proc[p.id].mentions / proc[p.id].total) * 100).toFixed(1)) : 0,
+    Cytowania: proc[p.id].total > 0 ? parseFloat(((proc[p.id].citations / proc[p.id].total) * 100).toFixed(1)) : 0,
   }));
 
   const openReport = () => {
@@ -722,10 +764,10 @@ export default function App() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
               {[
-                { label: "AI Share of Voice", value: avgSOV + "%", color: S.green, sub: "Średnia SOV" },
-                { label: "Visibility Score", value: visM + "%", color: S.sky, sub: "Mention Rate" },
-                { label: "Citation Score", value: visC + "%", color: S.purple, sub: "Citation Rate" },
-                { label: "Łączne zapytania", value: totalQ, color: S.gold, sub: "Wszystkie platformy" },
+                { label: "AI Share of Voice", value: fmtPct(avgSOV), color: S.green, sub: "Średnia SOV" },
+                { label: "Presence Score", value: fmtPct(totalPresence), color: S.sky, sub: "Mentions + Citations" },
+                { label: "Mention Rate", value: fmtPct(visM), color: S.purple, sub: "Nazwana z nazwy" },
+                { label: "Citation Rate", value: fmtPct(visC), color: S.coral, sub: "Cytowana jako źródło" },
               ].map((k, i) => (
                 <div key={i} style={{ background: S.navy2, border: "1px solid " + k.color + "1a", borderRadius: 12, padding: "18px 16px", position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: k.color + "0b" }} />
@@ -733,8 +775,8 @@ export default function App() {
                   <div style={{ fontSize: 32, fontWeight: 900, color: k.color, lineHeight: 1 }}>{k.value}</div>
                   <div style={{ fontSize: 9, color: "#233550", marginTop: 5 }}>{k.sub}</div>
                   {typeof k.value === "string" && k.value.endsWith("%") && (
-                    <div style={{ marginTop: 10, height: 3, background: S.navy4, borderRadius: 2, overflow: "hidden" }}>
-                      <div style={{ width: k.value, height: "100%", background: k.color, borderRadius: 2 }} />
+                    <div style={{ marginTop: 10, height: 4, background: S.navy4, borderRadius: 2, overflow: "visible", position: "relative" }}>
+                      <div style={{ width: "calc(max(" + (parseFloat(k.value)||0) + "%, " + (k.value !== "0%" ? "3px" : "0px") + "))", height: "100%", background: k.color, borderRadius: 2, minWidth: k.value !== "0%" ? 4 : 0 }} />
                     </div>
                   )}
                 </div>
@@ -756,7 +798,7 @@ export default function App() {
                     <XAxis dataKey="platform" tick={{ fill: S.muted, fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: S.muted, fontSize: 10 }} axisLine={false} tickLine={false} domain={[0, 100]} />
                     <Tooltip content={<Tip />} />
-                    <Bar dataKey="sov" name="SOV %" fill="url(#g1)" radius={[5, 5, 0, 0]} label={{ position: "top", fill: S.green, fontSize: 9, formatter: v => v + "%" }} />
+                    <Bar dataKey="sov" name="SOV %" fill="url(#g1)" radius={[5, 5, 0, 0]} label={{ position: "top", fill: S.green, fontSize: 9, formatter: v => (v < 1 && v > 0 ? v.toFixed(1) : v) + "%" }} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>
@@ -818,7 +860,7 @@ export default function App() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid " + S.border }}>
-                      {["Platforma", "Zapytań", "Wzmianki", "Cytowania", "SOV %", "Mention %", "Citation %"].map(h => (
+                      {["Platforma", "Zapytań", "Wzmianki", "Cytowania", "Presence", "SOV %", "Mention %", "Citation %"].map(h => (
                         <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 9, color: S.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px" }}>{h}</th>
                       ))}
                     </tr>
@@ -827,9 +869,14 @@ export default function App() {
                     {PLATFORMS.map(p => {
                       const d = proc[p.id];
                       const allM = d.mentions + allComps.reduce((s, c) => s + (d.compSet[c] || 0), 0);
-                      const sov = allM > 0 ? Math.round((d.mentions / allM) * 100) : 0;
-                      const mR = d.total > 0 ? Math.round((d.mentions / d.total) * 100) : 0;
-                      const cR = d.total > 0 ? Math.round((d.citations / d.total) * 100) : 0;
+                      const sovRaw2 = allM > 0 ? (d.mentions / allM) * 100 : 0;
+                      const sov = sovRaw2 < 1 && sovRaw2 > 0 ? Math.round(sovRaw2 * 10) / 10 : Math.round(sovRaw2);
+                      const mRraw = d.total > 0 ? (d.mentions / d.total) * 100 : 0;
+                      const mR = mRraw < 1 && mRraw > 0 ? Math.round(mRraw * 10) / 10 : Math.round(mRraw);
+                      const cRraw = d.total > 0 ? (d.citations / d.total) * 100 : 0;
+                      const cR = cRraw < 1 && cRraw > 0 ? Math.round(cRraw * 10) / 10 : Math.round(cRraw);
+                      const presRawP = d.total > 0 ? ((d.mentions + d.citations * 0.5) / d.total) * 100 : 0;
+                      const presencePct = presRawP < 0.1 ? 0 : presRawP < 1 ? Math.round(presRawP * 10) / 10 : Math.round(presRawP);
                       return (
                         <tr key={p.id} style={{ borderBottom: "1px solid " + S.navy3, opacity: d.total > 0 ? 1 : 0.4 }}>
                           <td style={{ padding: "10px 12px" }}><span style={{ background: p.color + "20", color: p.color, borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{p.icon} {p.short}</span></td>
@@ -837,20 +884,87 @@ export default function App() {
                           <td style={{ padding: "10px 12px", color: S.green, fontFamily: "monospace", fontWeight: 700 }}>{d.mentions}</td>
                           <td style={{ padding: "10px 12px", color: S.sky, fontFamily: "monospace", fontWeight: 700 }}>{d.citations}</td>
                           <td style={{ padding: "10px 12px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                              <div style={{ width: 40, height: 5, background: S.navy4, borderRadius: 2, overflow: "hidden" }}>
-                                <div style={{ width: sov + "%", height: "100%", background: "linear-gradient(90deg," + S.green + "," + S.sky + ")", borderRadius: 2 }} />
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{ width: 44, height: 7, background: S.navy4, borderRadius: 3, overflow: "hidden" }}>
+                                <div style={{ width: Math.min(presencePct, 100) + "%", height: "100%", background: "linear-gradient(90deg," + S.sky + "," + S.purple + ")", borderRadius: 3 }} />
                               </div>
-                              <span style={{ fontFamily: "monospace", fontSize: 11, color: S.text }}>{sov}%</span>
+                              <span style={{ fontFamily: "monospace", fontSize: 11, color: presencePct > 0 ? S.sky : S.muted, fontWeight: presencePct > 0 ? 700 : 400 }}>{fmtPct(presencePct)}</span>
                             </div>
                           </td>
-                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: mR >= 50 ? S.green : mR >= 25 ? S.gold : S.coral }}>{mR}%</td>
-                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: cR >= 30 ? S.green : cR >= 15 ? S.gold : S.coral }}>{cR}%</td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                              <div style={{ width: 40, height: 5, background: S.navy4, borderRadius: 2, overflow: "hidden" }}>
+                                <div style={{ width: Math.max(sov, sov > 0 ? 4 : 0) + "%", height: "100%", background: "linear-gradient(90deg," + S.green + "," + S.sky + ")", borderRadius: 2, minWidth: sov > 0 ? 3 : 0 }} />
+                              </div>
+                              <span style={{ fontFamily: "monospace", fontSize: 11, color: S.text }}>{fmtPct(sov)}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: mR >= 50 ? S.green : mR >= 25 ? S.gold : S.coral }}>{fmtPct(mR)}</td>
+                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: cR >= 30 ? S.green : cR >= 15 ? S.gold : S.coral }}>{fmtPct(cR)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+              </div>
+            </Card>
+
+            {/* OPPORTUNITIES */}
+            <Card style={{ marginBottom: 14, border: "1px solid " + S.gold + "33", background: S.navy2 }}>
+              <CLabel>⚡ Opportunities — Quick Wins</CLabel>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {(() => {
+                  const ops = [];
+                  // Platforms with data but 0 mentions
+                  const zeroMentionPlatforms = PLATFORMS.filter(p => proc[p.id].total > 0 && proc[p.id].mentions === 0);
+                  if (zeroMentionPlatforms.length > 0) {
+                    ops.push({ tag: "QUICK WIN", color: S.green, icon: "🎯", title: "Nieobecne platformy", body: zeroMentionPlatforms.map(p => p.name).join(", ") + " — marka ma dane ale zero wzmianek. Dodaj branded content odpowiadający na zapytania użytkowników." });
+                  }
+                  // Citations >> Mentions gap
+                  if (totalC > 0 && totalM === 0) {
+                    ops.push({ tag: "QUICK WIN", color: S.green, icon: "🔗", title: "Cytowana, ale nieznana", body: "Strona jest cytowana przez AI (" + totalC + "x) ale marka nie jest wymieniana z nazwy. Dodaj wyraźne branding signals w treściach — nazwa marki, about us, FAQ z nazwą." });
+                  }
+                  if (totalM > 0 && totalC > totalM * 2) {
+                    ops.push({ tag: "QUICK WIN", color: S.sky, icon: "📎", title: "Wysokie cytowania vs wzmianki", body: "AI cytuje stronę " + totalC + "x vs " + totalM + " wzmianek nazwy. Szansa: wzmocnij entity mentions — Wikipedia, Wikidata, bazy branżowe." });
+                  }
+                  // Competitor dominance
+                  const topComp = allComps[0];
+                  if (topComp && compCounts[topComp] > totalM * 1.5) {
+                    ops.push({ tag: "PRIORYTET", color: S.coral, icon: "⚔️", title: "Konkurent dominuje", body: topComp + " ma " + compCounts[topComp] + " wzm. vs " + totalM + " Twojej marki. Przeanalizuj ich treści i stwórz konkurencyjne odpowiedzi na te same zapytania." });
+                  }
+                  // Low citation score despite mentions
+                  if (visM > 0 && visC < visM / 3) {
+                    ops.push({ tag: "QUICK WIN", color: S.purple, icon: "🏗️", title: "Słabe cytowania — tech gap", body: "Marka znana AI (" + visM + "% mentions) ale rzadko cytowana (" + visC + "%). Wdróż: schema markup, structured data, poprawa Core Web Vitals — to zwiększy autorytet w oczach AI." });
+                  }
+                  // Platforms with very low SOV
+                  const lowSov = PLATFORMS.filter(p => proc[p.id].total > 0 && proc[p.id].mentions > 0).filter(p => {
+                    const d = proc[p.id];
+                    const allM = d.mentions + allComps.reduce((s, c) => s + (d.compSet[c] || 0), 0);
+                    return allM > 0 && Math.round((d.mentions / allM) * 100) < 15;
+                  });
+                  if (lowSov.length > 0) {
+                    ops.push({ tag: "SZANSA", color: S.sky, icon: "📈", title: "SOV < 15% na platformach", body: lowSov.map(p => p.short).join(", ") + " — SOV poniżej 15%. Twórz treści w formatach preferowanych przez te modele (długie FAQ, how-to, listy porównawcze)." });
+                  }
+                  // If no data at all
+                  if (totalQ === 0) {
+                    ops.push({ tag: "START", color: S.muted, icon: "📂", title: "Brak danych", body: "Wgraj pliki CSV z Ahrefs aby zobaczyć spersonalizowane rekomendacje." });
+                  }
+                  // Always add content freshness tip
+                  ops.push({ tag: "SZANSA", color: S.gold, icon: "🔄", title: "Content freshness", body: "Modele AI preferują świeże treści. Zaktualizuj kluczowe strony z datą publikacji, dodaj sekcje FAQ z aktualnymi danymi — to bezpośrednio wpływa na mention rate." });
+                  if (ops.length < 4) {
+                    ops.push({ tag: "QUICK WIN", color: S.green, icon: "🌐", title: "Entity building", body: "Zadbaj o wzmianki marki w zewnętrznych źródłach: branżowe katalogi, media, Wikipedia (jeśli spełniasz kryteria). AI uczy się rozpoznawać marki z takich sygnałów." });
+                  }
+                  return ops.slice(0, 6).map((op, i) => (
+                    <div key={i} style={{ padding: "12px 14px", background: op.color + "08", border: "1px solid " + op.color + "22", borderRadius: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                        <span style={{ fontSize: 15 }}>{op.icon}</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: op.color, background: op.color + "20", borderRadius: 4, padding: "1px 6px", letterSpacing: "0.8px", textTransform: "uppercase" }}>{op.tag}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: S.text }}>{op.title}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.6 }}>{op.body}</div>
+                    </div>
+                  ));
+                })()}
               </div>
             </Card>
 
@@ -866,6 +980,42 @@ export default function App() {
                 {allComps.length > 0 && <Ins color={S.gold} i="⚡" t={"Wykryto " + allComps.length + " konkurentów: " + allComps.slice(0, 3).join(", ") + (allComps.length > 3 ? "..." : "")} />}
               </div>
             </Card>
+            {/* Quick Wins */}
+            {topQW.length > 0 && (
+              <Card style={{ marginTop: 16, border: "1px solid " + S.gold + "33", background: "#0e1a0e" }}>
+                <CLabel style={{ color: S.gold }}>⚡ Quick Wins — Opportunity</CLabel>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {topQW.map((w, i) => {
+                    if (w.type === "cited") return (
+                      <div key={i} style={{ padding: "12px 14px", background: S.sky + "0c", border: "1px solid " + S.sky + "33", borderRadius: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: S.sky, marginBottom: 4 }}>🔗 {w.platform.name} — cytowana, ale nie wymieniana</div>
+                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Citation Rate: <strong style={{ color: S.sky }}>{w.cR}%</strong> — marka cytowana jako źródło, ale AI nie wymienia jej z nazwy. Optymalizacja E-E-A-T i treści może szybko przełożyć się na wzrost wzmianek.</div>
+                      </div>
+                    );
+                    if (w.type === "low_mention") return (
+                      <div key={i} style={{ padding: "12px 14px", background: S.green + "0a", border: "1px solid " + S.green + "33", borderRadius: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: S.green, marginBottom: 4 }}>📈 {w.platform.name} — niski Mention Rate ({w.mR}%)</div>
+                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Obecność jest widoczna (Citation: {w.cR}%), ale AI rzadko wymienia markę. Rozbudowanie contentu FAQ i how-to może podnieść Mention Rate do 15-25%.</div>
+                      </div>
+                    );
+                    if (w.type === "low_sov") return (
+                      <div key={i} style={{ padding: "12px 14px", background: S.gold + "08", border: "1px solid " + S.gold + "33", borderRadius: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: S.gold, marginBottom: 4 }}>🎯 {w.platform.name} — SOV {w.sov}% (przestrzeń do wzrostu)</div>
+                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Marka pojawia się, ale zajmuje mały udział głosu. Tworzenie treści targetowanych pod zapytania tej platformy może realnie przesunąć SOV powyżej 30%.</div>
+                      </div>
+                    );
+                    if (w.type === "comp_gap") return (
+                      <div key={i} style={{ padding: "12px 14px", background: S.coral + "0a", border: "1px solid " + S.coral + "33", borderRadius: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: S.coral, marginBottom: 4 }}>⚔️ Gap vs. {w.comp} ({w.compCount} vs {w.brandCount} wzm.)</div>
+                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Konkurent ma {w.compCount - w.brandCount} wzmianek więcej. Analiza zapytań, gdzie pojawia się {w.comp} a marka nie, może ujawnić luki contentowe do szybkiego wypełnienia.</div>
+                      </div>
+                    );
+                    return null;
+                  })}
+                </div>
+              </Card>
+            )}
+
             <Btn onClick={() => setTab("report")} style={{ marginTop: 22 }}>Generuj Raport →</Btn>
           </div>
         )}
@@ -900,7 +1050,7 @@ export default function App() {
             <Card>
               <CLabel>Podgląd KPI</CLabel>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
-                {[{ l: "AI SOV", v: avgSOV + "%", c: S.green }, { l: "Mentions", v: visM + "%", c: S.sky }, { l: "Citations", v: visC + "%", c: S.purple }, { l: "Zapytań", v: totalQ, c: S.gold }].map((k, i) => (
+                {[{ l: "AI SOV", v: fmtPct(avgSOV), c: S.green }, { l: "Mentions", v: fmtPct(visM), c: S.sky }, { l: "Citations", v: fmtPct(visC), c: S.purple }, { l: "Zapytań", v: totalQ, c: S.gold }].map((k, i) => (
                   <div key={i} style={{ textAlign: "center", padding: "12px", background: S.navy1, borderRadius: 8, border: "1px solid " + k.c + "22" }}>
                     <div style={{ fontSize: 9, color: S.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 4 }}>{k.l}</div>
                     <div style={{ fontSize: 22, fontWeight: 900, color: k.c }}>{k.v}</div>
