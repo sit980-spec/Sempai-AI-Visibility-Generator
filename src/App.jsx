@@ -1074,9 +1074,7 @@ export default function App() {
           const finalComment = sectionDefs
             .filter(s => s.ok !== false && getSec(s.key))
             .map(s => getSec(s.key))
-            .join("
-
-");
+            .join("\n\n");
 
           return <div>
             <STitle>Raport — przejrzyj i zatwierdź każdą sekcję</STitle>
