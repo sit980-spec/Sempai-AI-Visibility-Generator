@@ -81,8 +81,50 @@ function detectPlatform(headers, rows) {
   return null;
 }
 
+/* ── Brand variant generator ───────────────────────────────────────────────── */
+function generateBrandVariants(input) {
+  if (!input) return [];
+  const raw = input.toLowerCase().trim();
+  // Strip domain extension to get core name
+  const core = raw.replace(/\..*$/, "").replace(/[^a-z0-9]/g, "");
+  // Also keep with dot variants like "gardenspace.pl"
+  const withDot = raw.includes(".") ? raw : null;
+  // Common Polish noun suffixes for all 7 cases + pl/sg
+  const polishSuffixes = [
+    "", "a", "u", "owi", "em", "ie", "e", // singular
+    "i", "y", "ów", "om", "ami", "ach",   // plural
+  ];
+  // Build from core (gardenspace → gardenspace, gardenspacea, etc.)
+  const variants = new Set();
+  // Core as-is
+  variants.add(core);
+  if (withDot) variants.add(withDot);
+  // Also add raw input
+  variants.add(raw);
+  // If core has segments (e.g. "garden-space" → also "gardenspace", "garden space")
+  if (raw.includes("-")) {
+    variants.add(raw.replace(/-/g, ""));
+    variants.add(raw.replace(/-/g, " "));
+    raw.split("-").forEach(p => p.length > 3 && variants.add(p));
+  }
+  if (raw.includes(" ")) {
+    variants.add(raw.replace(/ /g, ""));
+    variants.add(raw.replace(/ /g, "-"));
+    raw.split(" ").forEach(p => p.length > 3 && variants.add(p));
+  }
+  // Polish declension for core (only if core looks Polish: has ó,ą,ę,ś,ć,ń,ź,ż or common endings)
+  const polishChars = /[ąćęłńóśźż]/;
+  if (polishChars.test(core) || /[aeiou]$/.test(core)) {
+    polishSuffixes.forEach(s => {
+      const stripped = core.replace(/[aeiou]{1,2}$/, "");
+      if (stripped.length > 2) variants.add(stripped + s);
+    });
+  }
+  return [...variants].filter(v => v.length > 1);
+}
+
 /* ── Parse Ahrefs buffer ───────────────────────────────────────────────────── */
-function parseAhrefsBuffer(buffer, brandKey) {
+function parseAhrefsBuffer(buffer, brandKey, brandVariants) {
   const text = decodeBuffer(buffer);
   const all = parseDelimited(text);
   if (all.length < 2) return null;
@@ -98,31 +140,44 @@ function parseAhrefsBuffer(buffer, brandKey) {
   if (mentionsIdx < 0) return null;
 
   const bk = brandKey.toLowerCase().trim();
+  const variants = brandVariants && brandVariants.length > 0
+    ? brandVariants.map(v => v.toLowerCase())
+    : [bk];
 
   const parsed = rows.map(r => {
     const mentionsRaw = (r[mentionsIdx] || "").toLowerCase();
     const linkRaw = (r[linkIdx] || "").toLowerCase();
     const keyword = r[kwIdx] || "";
-    const mentioned = bk ? mentionsRaw.includes(bk) : mentionsRaw.length > 0;
-    const cited = bk ? linkRaw.includes(bk) : false;
+    // Check if ANY variant matches in Mentions
+    const matchedVariant = variants.find(v => v && mentionsRaw.includes(v)) || null;
+    const mentioned = !!matchedVariant;
+    // Check if URL contains domain
+    const domainKey = bk.includes(".") ? bk : bk + ".";
+    const cited = linkRaw.includes(bk) || linkRaw.includes(domainKey);
     const otherMentions = mentionsRaw
       .split(/[,\n]+/)
       .map(m => m.trim())
-      .filter(m => m && (bk ? !m.includes(bk) : true));
-    return { keyword, mentioned, cited, otherMentions };
+      .filter(m => m && !variants.some(v => m.includes(v)));
+    return { keyword, mentioned, cited, otherMentions, matchedVariant };
   }).filter(r => r.keyword);
 
-  return { platformId: pid, rows: parsed, headers };
+  // Count per variant for stats
+  const variantHits = {};
+  parsed.forEach(r => {
+    if (r.matchedVariant) variantHits[r.matchedVariant] = (variantHits[r.matchedVariant] || 0) + 1;
+  });
+
+  return { platformId: pid, rows: parsed, headers, variantHits };
 }
 
 /* ── Aggregate ─────────────────────────────────────────────────────────────── */
-function aggregatePlatform(rows) {
+function aggregatePlatform(rows, variantHits) {
   const total = rows.length;
   const mentions = rows.filter(r => r.mentioned).length;
   const citations = rows.filter(r => r.cited).length;
   const compSet = {};
   rows.forEach(r => { r.otherMentions.forEach(c => { compSet[c] = (compSet[c] || 0) + 1; }); });
-  return { total, mentions, citations, compSet };
+  return { total, mentions, citations, compSet, variantHits: variantHits || {} };
 }
 
 /* ── Particle background ───────────────────────────────────────────────────── */
@@ -355,22 +410,39 @@ function buildReport(args) {
     '<h2><span class="num">&#9733;</span> Komentarz analityczny</h2>',
     '<div class="comment-box">',
     '<div class="comment-title">Podsumowanie widoczności AI</div>',
-    "<p>Niniejszy raport przedstawia wyniki analizy widoczności marki <strong>" + (brand.name || "klienta") + "</strong> w odpowiedziach generowanych przez modele sztucznej inteligencji. Analiza obejmuje " + totalQ.toLocaleString("pl-PL") + " zapytań we wszystkich monitorowanych platformach AI i dostarcza kompleksowego obrazu obecności marki w ekosystemie AI.</p>",
-    "<p>Wskaźnik <strong>AI Share of Voice (SOV)</strong> na poziomie " + avgSOV + "% oznacza, że marka zajmuje " + avgSOV + "% przestrzeni wspomnieniowej wśród wszystkich marek pojawiających się w odpowiedziach AI na analizowane zapytania" + (allComps.length > 0 ? " (wraz z konkurentami: " + allComps.slice(0, 3).join(", ") + (allComps.length > 3 ? " i in." : "") + ")" : "") + ". " + (avgSOV >= 40 ? "Jest to wynik świadczący o silnej pozycji marki w przestrzeni AI." : avgSOV >= 20 ? "Wynik wskazuje na umiarkowaną widoczność z wyraźnym potencjałem wzrostu." : "Wynik wskazuje na znaczną przestrzeń do poprawy — marka jest rzadko wymieniana przez AI w kontekście branżowych zapytań.") + "</p>",
-    "<p><strong>Visibility Score</strong> (Mention Rate) wynoszący " + visM + "% pokazuje, że w " + visM + "% analizowanych zapytań AI wspomniała markę z nazwy. " + (visM > visC ? "Warto zwrócić uwagę na wyraźną dysproporcję między wzmiankami (" + visM + "%) a cytowaniami (" + visC + "%) — marka jest rozpoznawana przez AI, jednak jej strona rzadziej pojawia się jako źródło w cytowaniach. To sygnał wskazujący na potrzebę wzmocnienia autorytetu technicznego i link buildingu." : "Korelacja między wzmiankami (" + visM + "%) a cytowaniami (" + visC + "%) jest zdrowa, co świadczy o dobrym autorytecie technicznym domeny w oczach modeli AI.") + "</p>",
-    best ? "<p><strong>Najlepsza platforma</strong> to " + best.platform + " z SOV " + best.sov + "%. " + (worst && worst !== best ? "Platforma wymagająca największej uwagi to " + worst.platform + " (SOV " + worst.sov + "%) — zaleca się stworzenie dedykowanej strategii treści i optymalizacji pod tę platformę." : "Wyniki są równomierne na wszystkich platformach.") + "</p>" : "",
-    "<p><strong>Rekomendacje na kolejne 3-6 miesięcy:</strong> Priorytetem powinno być rozbudowanie treści odpowiadających na pytania z niską wzmiankowalnością, wdrożenie znaczników schema markup, budowanie wzmianek w zewnętrznych źródłach cytowanych przez modele AI oraz regularne monitorowanie zmian widoczności w poszczególnych platformach.</p>",
+    "<p>Niniejszy raport przedstawia wyniki analizy widoczności marki <strong>" + (brand.name || "klienta") + "</strong> w odpowiedziach generowanych przez modele AI. Analiza obejmuje <strong>" + totalQ.toLocaleString("pl-PL") + " zapytan</strong> na platformach: AI Overview, AI Mode, ChatGPT, Gemini, Perplexity i Copilot.</p>",
+    // SOV paragraph - contextual
+    (avgSOV >= 30
+      ? "<p><strong>AI Share of Voice " + avgSOV + "%</strong> to wynik dobry — marka wymieniana jest w ponad co trzecim przypadku, gdy temat dotyczy branzy. Koncentracja na utrzymaniu i ekspansji na slabsze platformy.</p>"
+      : avgSOV >= 10
+        ? "<p><strong>AI Share of Voice " + avgSOV + "%</strong> (srednio " + avgSOV + " na 100 zapytan, gdzie pojawia sie jakakolwiek marka z branzy) wskazuje na umiarkowana widocznosc. Glowna dzwignia wzrostu: tworzenie treści odpowiadajacych bezposrednio na zapytania uzytkownikow — szczegolnie FAQ, porownania i how-to." + (allComps.length > 0 ? " Glowni konkurenci w danych: " + allComps.slice(0, 3).join(", ") + "." : "") + "</p>"
+        : "<p><strong>AI Share of Voice " + avgSOV + "%</strong> — marka pojawia sie rzadko w odpowiedziach AI" + (totalM > 0 ? " (" + totalM + " na " + totalQ.toLocaleString("pl-PL") + " zapytan)" : "") + ". Na tym etapie kluczowe jest zbudowanie podstaw: entity recognition (Wikipedia, Wikidata, bazy branzowe), systematyczny content pod zapytania branzowe i structured data." + (allComps.length > 0 ? " Dla porownania: " + allComps[0] + " pojawia sie " + compCounts[allComps[0]] + "x w tych samych danych." : "") + "</p>"),
+    // Mentions vs Citations smart paragraph
+    (() => {
+      const mTot = totalM; const cTot = totalC;
+      const ratio = mTot > 0 ? cTot / mTot : null;
+      if (mTot === 0 && cTot === 0) return "<p>W analizowanych zapytaniach AI nie odnotowano ani wzmianek nazwy marki, ani cytowan strony. Moze to oznaczac: (1) zapytania nie sa typowe dla tej marki, (2) marka nie ma jeszcze rozpoznawalnosci w AI, lub (3) klucz marki wymaga kalibracji. Zalecamy przeglad sekcji Import i dostosowanie klucza dopasowania.</p>";
+      if (mTot === 0 && cTot > 0) return "<p><strong>Uwaga diagnostyczna:</strong> Strona jest cytowana przez AI jako zrodlo (" + cTot + "x) ale nie jest wymieniana z nazwy. To typowy pattern 'anonimowego eksperta' — AI ufa tresciom, ale nie identyfikuje marki. Rozwiazanie: dodaj branding signals w tresciach (nazwa marki w nagłowkach, About Us, Wikipedia), zbuduj wzmianki w mediach branzowych.</p>";
+      if (ratio !== null && ratio > 8) return "<p><strong>Dysproporcja cytowania vs wzmianki: " + cTot + " cyt. vs " + mTot + " wzm.</strong> To nie jest zdrowa korelacja — oznacza, ze AI uzywamy strony jako zrodla danych, ale nie utossamia jej z marka. Priorytet: budowanie entity graph — Wikidata, Wikipedia, wzmianki z linkiem w mediach, anchor texty z nazwa marki.</p>";
+      if (ratio !== null && ratio < 0.15 && mTot >= 5) return "<p><strong>Wzmianki (" + mTot + ") bez cytowania (" + cTot + ")</strong> — AI kojarzy marke, ale nie poleca jej strony bezposrednio. Priorytet techniczny: structured data (schema.org), poprawa Core Web Vitals, wewnetrzne linkowanie kluczowych stron.</p>";
+      return "<p><strong>Mentions: " + mTot + " | Citations: " + cTot + "</strong> — obie metryki potwierdzaja obecnosc marki. Nasteony krok: zwiekszenie czestotliwosci przez konsekwentny content plan (min. 2-4 artykulow miesiecznie pod zapytania z niskim SOV).</p>";
+    })(),
+    // Platforms paragraph
+    (best ? "<p><strong>Najlepsza platforma: " + best.platform + "</strong> (SOV " + best.sov + "%). " + (best.sov < 10 ? "Mimo ze jest najlepsza, SOV ponizej 10% to nadal poczatkowy etap — jest duzo miejsca na wzrost." : best.sov < 30 ? "Solidna baza do budowania dalszej widocznosci." : "Silna pozycja do utrzymania.") + (worst && worst !== best && worst.sov === 0 ? " Platforma " + worst.platform + " wymaga osobnej strategii — marka jest calkowicie nieobecna mimo posiadania danych." : worst && worst !== best ? " Najslabsza platforma: " + worst.platform + " (SOV " + worst.sov + "%) — warto przygotowac tresc w formatach preferowanych przez ten model." : "") + "</p>" : ""),
+    "<p><strong>Priorytety na 3-6 miesiecy:</strong> (1) " + (totalM === 0 && totalC > 0 ? "Zbudowanie entity recognition — Wikipedia/Wikidata, wzmianki w mediach z nazwa marki." : "Tworzenie tresci FAQ i how-to pod zapytania z najnizszym SOV.") + " (2) Wdrozenie schema markup (Organization, BreadcrumbList, FAQPage). (3) " + (allComps.length > 0 && compCounts[allComps[0]] > totalM ? "Analiza gap contentowego wzgledem " + allComps[0] + " (" + compCounts[allComps[0]] + " wzm.)." : "Regularne monitorowanie widocznosci i optymalizacja na biezaco.") + "</p>",
     "</div>",
     "</section>",
   ].join("");
 
   const insightsHtml = [
     '<div class="ig">',
-    best ? '<div class="ins" style="background:#2edf8f08;border-color:#2edf8f2a"><span class="ii" style="color:#1db872">&#8593;</span><span class="it"><strong>Najlepsza platforma:</strong> ' + best.platform + " z SOV " + best.sov + "% — koncentrowa\u0107 dzia\u0142ania na utrzymaniu pozycji.</span></div>" : "",
-    worst && worst !== best ? '<div class="ins" style="background:#ff5c6a08;border-color:#ff5c6a2a"><span class="ii" style="color:#e03050">&#8595;</span><span class="it"><strong>Platforma do poprawy:</strong> ' + worst.platform + " (SOV " + worst.sov + "%) \u2014 wdro\u017cy\u0107 dedykowan\u0105 strategi\u0119 tre\u015bci.</span></div>" : "",
-    visM > visC
-      ? '<div class="ins" style="background:#a78bfa08;border-color:#a78bfa2a"><span class="ii" style="color:#a78bfa">!</span><span class="it"><strong>Dysproporcja:</strong> Wzmianki ' + visM + "% vs cytowania " + visC + "% \u2014 priorytet: structured data, E-E-A-T.</span></div>"
-      : '<div class="ins" style="background:#2edf8f08;border-color:#2edf8f2a"><span class="ii" style="color:#1db872">&#10003;</span><span class="it"><strong>Zdrowa korelacja</strong> wzmianek (' + visM + "%) i cytowa\u0144 (" + visC + "%).</span></div>",
+    best ? '<div class="ins" style="background:#2edf8f08;border-color:#2edf8f2a"><span class="ii" style="color:#1db872">&#8593;</span><span class="it"><strong>Najlepsza: ' + best.platform + '</strong> SOV ' + best.sov + '% &#8212; ' + (best.sov >= 30 ? 'silna pozycja do utrzymania.' : best.sov >= 10 ? 'umiarkowana &#8212; rozbuduj FAQ i how-to pod zapytania tej platformy.' : 'niska baza &#8212; twórz dedykowany content pod t&#x119; platform&#x119;.') + "</span></div>" : "",
+    worst && worst !== best ? '<div class="ins" style="background:#ff5c6a08;border-color:#ff5c6a2a"><span class="ii" style="color:#e03050">&#8595;</span><span class="it"><strong>Do dzia&#322;ania: ' + worst.platform + '</strong> SOV ' + worst.sov + '% &#8212; ' + (worst.sov === 0 ? 'brak obecno&#347;ci. Zbadaj zapytania tej platformy i przygotuj odpowiedzi w jej formacie.' : 'najni&#380;szy SOV &#8212; twórz content w formacie preferowanym przez ten model.') + "</span></div>" : "",
+    (totalM === 0 && totalC === 0) ? '<div class="ins" style="background:#4a709008;border-color:#4a709022"><span class="ii" style="color:#4a7090">&#9675;</span><span class="it"><strong>Brak obecno&#347;ci</strong> &#8212; marka niewidoczna dla AI. Start: entity building (Wikipedia, Wikidata) + structured data.</span></div>'
+      : (totalM === 0 && totalC > 0) ? '<div class="ins" style="background:#f5c84208;border-color:#f5c8422a"><span class="ii" style="color:#f5c842">!</span><span class="it"><strong>Cytowana bez nazwy</strong> (' + totalC + ' cyt., 0 wzm.) &#8212; AI ufa stronie, ale nie zna marki. Dodaj branding: nazwa w nag&#322;ówkach, About Us, wzmianki w mediach.</span></div>'
+      : (totalC > totalM * 8) ? '<div class="ins" style="background:#ff5c6a08;border-color:#ff5c6a2a"><span class="ii" style="color:#ff5c6a">!</span><span class="it"><strong>Dysproporcja ' + totalC + ' cyt. vs ' + totalM + ' wzm.</strong> &#8212; AI u&#380;ywa strony, ale nie zna marki. Priorytet: Wikipedia, Wikidata, anchor texty z nazw&#261; marki.</span></div>'
+      : (totalM > totalC * 7 && totalM >= 5) ? '<div class="ins" style="background:#a78bfa08;border-color:#a78bfa2a"><span class="ii" style="color:#a78bfa">!</span><span class="it"><strong>Wzmianki bez cytowa&#324;</strong> &#8212; AI zna mark&#281;, ale nie poleca strony. Wdrót: structured data, Core Web Vitals, linkowanie wewn&#281;trzne.</span></div>'
+      : '<div class="ins" style="background:#2edf8f08;border-color:#2edf8f2a"><span class="ii" style="color:#1db872">&#10003;</span><span class="it"><strong>Obecno&#347;&#263; potwierdzona:</strong> ' + totalM + ' wzm. + ' + totalC + ' cyt. &#8212; pracuj nad zwi&#281;kszeniem cz&#281;stotliwo&#347;ci przez content plan.</span></div>',
     '<div class="ins" style="background:#4da6ff08;border-color:#4da6ff2a"><span class="ii" style="color:#4da6ff">&#9672;</span><span class="it"><strong>Zasi\u0119g AI:</strong> ' + (brand.name || "Marka") + " widoczna w <strong>" + visiblePlatforms + "/" + PLATFORMS.length + "</strong> platformach." + (missingPlatforms ? " Brak wzm.: " + missingPlatforms + "." : "") + "</span></div>",
     compRows.length > 0 && compRows[0].mentions > totalM ? '<div class="ins" style="background:#ff5c6a08;border-color:#ff5c6a2a"><span class="ii" style="color:#e03050">&#9888;</span><span class="it"><strong>Uwaga:</strong> ' + compRows[0].name + " wyprzedza mark\u0119 (" + compRows[0].mentions + " vs " + totalM + " wzm.).</span></div>" : "",
     '<div class="ins" style="background:#f5c84208;border-color:#f5c8422a"><span class="ii" style="color:#d4a017">&#8594;</span><span class="it"><strong>Strategia 3-6 mies.:</strong> FAQ/how-to, schema markup, link building pod AI.</span></div>',
@@ -418,35 +490,55 @@ export default function App() {
   const [errors, setErrors] = useState([]);
   const [allDetectedMentions, setAllDetectedMentions] = useState([]);
   const [brandMentionKey, setBrandMentionKey] = useState("");
+  const [brandVariants, setBrandVariants] = useState([]);
+  const [allVariantHits, setAllVariantHits] = useState({});
   const [promptCopied, setPromptCopied] = useState(false);
 
-  const autoKey = brand.url.toLowerCase()
+  const autoKey = (brand.url || brand.name).toLowerCase()
     .replace(/^https?:\/\/(www\.)?/, "")
     .replace(/\..*$/, "")
     .trim() || brand.name.toLowerCase().split(/\s+/)[0];
   const brandKey = brandMentionKey.trim() || autoKey;
+  // Variants: user-selected or auto-generated from brand name/url
+  const variantsInUse = brandVariants.length > 0
+    ? brandVariants
+    : generateBrandVariants(brand.url || brand.name);
 
   // Re-parse all files when brandKey changes
   useEffect(() => {
     if (!brandKey || Object.keys(rawBuffers).length === 0) return;
     const next = {};
+    const mergedHits = {};
     Object.entries(rawBuffers).forEach(([, buf]) => {
       try {
-        const r = parseAhrefsBuffer(buf, brandKey);
-        if (r?.platformId) next[r.platformId] = aggregatePlatform(r.rows);
+        const r = parseAhrefsBuffer(buf, brandKey, variantsInUse);
+        if (r?.platformId) {
+          next[r.platformId] = aggregatePlatform(r.rows, r.variantHits);
+          Object.entries(r.variantHits || {}).forEach(([v, c]) => {
+            mergedHits[v] = (mergedHits[v] || 0) + c;
+          });
+        }
       } catch (_) { /* ignore */ }
     });
-    if (Object.keys(next).length > 0) setParsedData(next);
-  }, [brandKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (Object.keys(next).length > 0) {
+      setParsedData(next);
+      setAllVariantHits(mergedHits);
+    }
+  }, [brandKey, brandVariants]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFiles = (filename, buffer) => {
     try {
-      const result = parseAhrefsBuffer(buffer, brandKey);
+      const result = parseAhrefsBuffer(buffer, brandKey, variantsInUse);
       if (!result || !result.platformId) {
         setErrors(e => [...e, "Nie rozpoznano platformy w pliku: " + filename]);
         return;
       }
-      const agg = aggregatePlatform(result.rows);
+      const agg = aggregatePlatform(result.rows, result.variantHits);
+      setAllVariantHits(prev => {
+        const merged = { ...prev };
+        Object.entries(result.variantHits || {}).forEach(([v, c]) => { merged[v] = (merged[v] || 0) + c; });
+        return merged;
+      });
       setParsedData(d => ({ ...d, [result.platformId]: agg }));
       setLoadedFiles(f => ({ ...f, [result.platformId]: filename }));
       setRawBuffers(rb => ({ ...rb, [filename]: buffer }));
@@ -486,7 +578,18 @@ export default function App() {
   const totalQ = PLATFORMS.reduce((s, p) => s + (proc[p.id].total || 0), 0);
   const totalM = PLATFORMS.reduce((s, p) => s + (proc[p.id].mentions || 0), 0);
   const totalC = PLATFORMS.reduce((s, p) => s + (proc[p.id].citations || 0), 0);
-  const fmtPct = v => v === 0 ? "0%" : (v < 1 ? v.toFixed(1) + "%" : v + "%");
+  // Format percentage with "1 na X zapytań" for tiny values
+  const fmtPct = (v, total) => {
+    if (v === 0) return "0%";
+    if (v < 1 && total > 0) {
+      const count = Math.round((v / 100) * total);
+      if (count < 2) return "1 na " + total.toLocaleString("pl-PL") + " zap.";
+      return v.toFixed(1) + "% (" + count + " zap.)";
+    }
+    if (v < 1) return v.toFixed(1) + "%";
+    return v + "%";
+  };
+  const fmtPctSimple = v => v === 0 ? "0%" : (v < 1 ? v.toFixed(1) + "%" : v + "%");
   const pct = (num, den) => {
     if (den === 0) return 0;
     const v = (num / den) * 100;
@@ -632,6 +735,33 @@ export default function App() {
               <Inp label="URL / domena marki *" value={brand.url} set={v => setBrand(b => ({ ...b, url: v }))} ph="gardenspace.pl" />
               <Inp label="Branża" value={brand.industry} set={v => setBrand(b => ({ ...b, industry: v }))} ph="np. Meble ogrodowe / E-commerce" span2 />
             </div>
+            {(brand.name || brand.url) && (() => {
+              const vs = generateBrandVariants(brand.url || brand.name);
+              return vs.length > 0 ? (
+                <Card style={{ marginBottom: 14 }}>
+                  <CLabel>Warianty marki do sprawdzenia (auto-generowane)</CLabel>
+                  <div style={{ fontSize: 12, color: S.muted, marginBottom: 10, lineHeight: 1.6 }}>
+                    System sprawdzi kolumnę <strong style={{ color: S.text }}>Mentions</strong> pod kątem tych wariantów — odmiany, skróty, domena. Możesz dodać własne oddzielone przecinkami:
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                    {vs.map((v, i) => (
+                      <span key={i} style={{ padding: "3px 11px", borderRadius: 16, fontSize: 11, fontWeight: 700, background: S.green + "18", border: "1px solid " + S.green + "33", color: S.green }}>{v}</span>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      value={brandVariants.join(", ")}
+                      onChange={e => setBrandVariants(e.target.value.split(",").map(v => v.trim()).filter(Boolean))}
+                      placeholder="Dodaj własne warianty oddzielone przecinkami..."
+                      style={{ flex: 1, background: S.navy1, border: "1px solid " + S.border, borderRadius: 8, padding: "8px 12px", color: S.text, fontSize: 12, outline: "none" }}
+                    />
+                    {brandVariants.length > 0 && (
+                      <button onClick={() => setBrandVariants([])} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + S.border, borderRadius: 8, color: S.muted, fontSize: 11, cursor: "pointer" }}>✕ Reset</button>
+                    )}
+                  </div>
+                </Card>
+              ) : null;
+            })()}
             <Card>
               <CLabel>Jak działa parser Ahrefs?</CLabel>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -660,46 +790,93 @@ export default function App() {
 
             <DropZone onFiles={handleFiles} />
 
-            {/* Brand picker */}
+            {/* Brand variant detection panel */}
             {allDetectedMentions.length > 0 && (
-              <div style={{ marginTop: 16, padding: "16px 18px", background: "#0a1820", border: "1px solid " + (totalM > 0 ? S.green + "44" : S.gold + "44"), borderRadius: 12 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                  <span style={{ fontSize: 20, flexShrink: 0 }}>{totalM > 0 ? "✅" : "⚠️"}</span>
-                  <div style={{ flex: 1 }}>
+              <div style={{ marginTop: 16, padding: "16px 18px", background: "#080e18", border: "1px solid " + (totalM > 0 ? S.green + "55" : S.gold + "55"), borderRadius: 12 }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                  <span style={{ fontSize: 18 }}>{totalM > 0 ? "✅" : "⚠️"}</span>
+                  <div>
                     {totalM > 0 ? (
                       <div style={{ fontSize: 13, color: S.green, fontWeight: 700 }}>
-                        Marka &quot;{brandKey}&quot; wykryta — {totalM} wzmianek w danych.
+                        Marka wykryta — {totalM} wzmianek, {totalC} cytowań
                       </div>
                     ) : (
-                      <>
-                        <div style={{ fontSize: 13, color: S.gold, fontWeight: 700, marginBottom: 4 }}>
-                          Marka &quot;{brandKey}&quot; nie znaleziona w kolumnie Mentions.
-                        </div>
-                        <div style={{ fontSize: 12, color: S.muted, marginBottom: 10 }}>
-                          Kliknij markę z listy lub wpisz ręcznie:
-                        </div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                          {allDetectedMentions.map((m, i) => {
-                            const cols = [S.sky, S.coral, S.gold, S.purple, "#34d399", S.green];
-                            const active = brandMentionKey === m;
-                            return (
-                              <button key={i} onClick={() => setBrandMentionKey(active ? "" : m)}
-                                style={{ padding: "4px 13px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", background: active ? cols[i % 6] + "44" : cols[i % 6] + "1a", border: "1px solid " + (active ? cols[i % 6] : cols[i % 6] + "44"), color: cols[i % 6] }}>
-                                {m}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <input value={brandMentionKey} onChange={e => setBrandMentionKey(e.target.value)} placeholder="wpisz ręcznie..."
-                            style={{ flex: 1, background: S.navy2, border: "1px solid " + S.border, borderRadius: 8, padding: "8px 12px", color: S.text, fontSize: 12, outline: "none", fontFamily: "monospace" }} />
-                          {brandMentionKey && <button onClick={() => setBrandMentionKey("")} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + S.border, borderRadius: 8, color: S.muted, fontSize: 11, cursor: "pointer" }}>✕ Reset</button>}
-                        </div>
-                        {totalC > 0 && <div style={{ fontSize: 11, color: S.sky, marginTop: 8 }}>💡 {totalC} cytowań znalezionych — marka cytowana jako źródło, ale nie wymieniana z nazwy.</div>}
-                      </>
+                      <div style={{ fontSize: 13, color: S.gold, fontWeight: 700 }}>
+                        Nie znaleziono marki &quot;{brandKey}&quot; — wybierz wariant poniżej
+                      </div>
                     )}
+                    <div style={{ fontSize: 11, color: S.muted, marginTop: 2 }}>
+                      Sprawdzano warianty: {variantsInUse.slice(0, 6).join(", ")}{variantsInUse.length > 6 ? " +" + (variantsInUse.length - 6) + " więcej" : ""}
+                    </div>
                   </div>
                 </div>
+
+                {/* Variant hits — what actually matched */}
+                {Object.keys(allVariantHits).length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 10, color: S.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Wykryte dopasowania</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {Object.entries(allVariantHits).sort((a,b) => b[1]-a[1]).map(([variant, count], i) => (
+                        <div key={i} style={{ padding: "4px 12px", borderRadius: 8, background: S.green + "18", border: "1px solid " + S.green + "44", fontSize: 12 }}>
+                          <span style={{ color: S.green, fontWeight: 700 }}>{variant}</span>
+                          <span style={{ color: S.muted, marginLeft: 6, fontSize: 11 }}>{count}×</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mentions found in data — to pick from */}
+                {totalM === 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, color: S.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Marki w danych — kliknij swoją</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                      {allDetectedMentions.map((m, i) => {
+                        const cols = [S.sky, S.coral, S.gold, S.purple, "#34d399", S.green];
+                        const isActive = brandMentionKey === m;
+                        return (
+                          <button key={i} onClick={() => { setBrandMentionKey(isActive ? "" : m); setBrandVariants(isActive ? [] : generateBrandVariants(m)); }}
+                            style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", background: isActive ? cols[i%6] + "33" : cols[i%6] + "12", border: "1px solid " + (isActive ? cols[i%6] : cols[i%6] + "44"), color: cols[i%6] }}>
+                            {m}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input value={brandMentionKey} onChange={e => { setBrandMentionKey(e.target.value); setBrandVariants(e.target.value ? generateBrandVariants(e.target.value) : []); }} placeholder="wpisz ręcznie lub wybierz powyżej..."
+                        style={{ flex: 1, background: S.navy2, border: "1px solid " + S.border, borderRadius: 8, padding: "8px 12px", color: S.text, fontSize: 12, outline: "none", fontFamily: "monospace" }} />
+                      {brandMentionKey && <button onClick={() => { setBrandMentionKey(""); setBrandVariants([]); }} style={{ padding: "6px 12px", background: "transparent", border: "1px solid " + S.border, borderRadius: 8, color: S.muted, fontSize: 11, cursor: "pointer" }}>✕</button>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Extended stats */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginTop: 10 }}>
+                  {[
+                    { label: "Wzmianki", val: totalM, total: totalQ, color: S.green },
+                    { label: "Cytowania", val: totalC, total: totalQ, color: S.sky },
+                    { label: "Presence", val: totalM + totalC, total: totalQ, color: S.purple },
+                  ].map((s, i) => {
+                    const pctV = s.total > 0 ? (s.val / s.total) * 100 : 0;
+                    const label = pctV === 0 ? "0 / " + s.total
+                      : pctV < 1 ? s.val + " na " + s.total.toLocaleString("pl-PL") + " zap."
+                      : pctV.toFixed(1) + "% (" + s.val + " / " + s.total + ")";
+                    return (
+                      <div key={i} style={{ background: S.navy1, borderRadius: 8, padding: "10px 12px", border: "1px solid " + s.color + "22" }}>
+                        <div style={{ fontSize: 9, color: S.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>{s.label}</div>
+                        <div style={{ fontSize: 16, fontWeight: 900, color: s.color }}>{s.val}</div>
+                        <div style={{ fontSize: 10, color: S.muted, marginTop: 2 }}>{label}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {totalC > 0 && totalM === 0 && (
+                  <div style={{ marginTop: 10, fontSize: 11, color: S.sky, padding: "8px 12px", background: S.sky + "0a", borderRadius: 6 }}>
+                    💡 {totalC} cytowań znalezionych (Link URL zawiera domenę) — AI cytuje stronę jako źródło, ale nie wymienia marki z nazwy. Wybierz markę z listy powyżej lub wpisz ją ręcznie.
+                  </div>
+                )}
               </div>
             )}
 
@@ -764,10 +941,10 @@ export default function App() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
               {[
-                { label: "AI Share of Voice", value: fmtPct(avgSOV), color: S.green, sub: "Średnia SOV" },
-                { label: "Presence Score", value: fmtPct(totalPresence), color: S.sky, sub: "Mentions + Citations" },
-                { label: "Mention Rate", value: fmtPct(visM), color: S.purple, sub: "Nazwana z nazwy" },
-                { label: "Citation Rate", value: fmtPct(visC), color: S.coral, sub: "Cytowana jako źródło" },
+                { label: "AI Share of Voice", value: fmtPctSimple(avgSOV), color: S.green, sub: "Średnia SOV" },
+                { label: "Presence Score", value: fmtPct(totalPresence, totalQ), color: S.sky, sub: "Mentions + Citations" },
+                { label: "Mention Rate", value: fmtPct(visM, totalQ), color: S.purple, sub: totalM + " na " + totalQ + " zap." },
+                { label: "Citation Rate", value: fmtPct(visC, totalQ), color: S.coral, sub: totalC + " na " + totalQ + " zap." },
               ].map((k, i) => (
                 <div key={i} style={{ background: S.navy2, border: "1px solid " + k.color + "1a", borderRadius: 12, padding: "18px 16px", position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: k.color + "0b" }} />
@@ -899,8 +1076,14 @@ export default function App() {
                               <span style={{ fontFamily: "monospace", fontSize: 11, color: S.text }}>{fmtPct(sov)}</span>
                             </div>
                           </td>
-                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: mR >= 50 ? S.green : mR >= 25 ? S.gold : S.coral }}>{fmtPct(mR)}</td>
-                          <td style={{ padding: "10px 12px", fontFamily: "monospace", color: cR >= 30 ? S.green : cR >= 15 ? S.gold : S.coral }}>{fmtPct(cR)}</td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <span style={{ fontFamily: "monospace", fontSize: 11, color: mR >= 50 ? S.green : mR >= 25 ? S.gold : S.coral, fontWeight: 700 }}>{fmtPct(mR, d.total)}</span>
+                            {mR > 0 && mR < 1 && <div style={{ fontSize: 9, color: S.muted }}>{"("+d.mentions+")"}</div>}
+                          </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <span style={{ fontFamily: "monospace", fontSize: 11, color: cR >= 30 ? S.green : cR >= 15 ? S.gold : S.coral, fontWeight: 700 }}>{fmtPct(cR, d.total)}</span>
+                            {cR > 0 && cR < 1 && <div style={{ fontSize: 9, color: S.muted }}>{"("+d.citations+")"}</div>}
+                          </td>
                         </tr>
                       );
                     })}
@@ -969,53 +1152,52 @@ export default function App() {
             </Card>
 
             <Card>
-              <CLabel>✦ Spostrzeżenia Sempai</CLabel>
+              <CLabel>✦ Spostrzeżenia — co to znaczy i co robić</CLabel>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {best && <Ins color={S.green} i="↑" t={"Najlepsza: " + best.platform + " — SOV " + best.sov + "%"} />}
-                {worst && worst !== best && <Ins color={S.coral} i="↓" t={"Do poprawy: " + worst.platform + " — SOV " + worst.sov + "%"} />}
-                {visM > visC
-                  ? <Ins color={S.purple} i="!" t={"Dysproporcja wzm. (" + visM + "%) vs cyt. (" + visC + "%) — priorytet: tech SEO"} />
-                  : <Ins color={S.green} i="✓" t="Dobra korelacja wzmianek i cytowań" />}
-                <Ins color={S.sky} i="◈" t={(brand.name || "Marka") + " widoczna w " + PLATFORMS.filter(p => proc[p.id]?.mentions > 0).length + "/" + PLATFORMS.length + " platformach AI"} />
-                {allComps.length > 0 && <Ins color={S.gold} i="⚡" t={"Wykryto " + allComps.length + " konkurentów: " + allComps.slice(0, 3).join(", ") + (allComps.length > 3 ? "..." : "")} />}
+                {/* SOV insight */}
+                {best && (
+                  <Ins color={S.green} i="↑" t={
+                    best.sov >= 30
+                      ? "Silna pozycja na " + best.platform + " (SOV " + best.sov + "%) — utrzymaj regularny content i monitoruj."
+                      : best.sov >= 10
+                        ? best.platform + ": SOV " + best.sov + "% — solidna baza, ale jest przestrzeń. Rozbuduj treści FAQ i how-to."
+                        : best.platform + ": SOV tylko " + best.sov + "% — marka rzadko wymieniana. Priorytet: tworzenie treści pod konkretne zapytania."
+                  } />
+                )}
+                {worst && worst !== best && (
+                  <Ins color={S.coral} i="↓" t={
+                    worst.sov === 0
+                      ? worst.platform + ": 0% SOV — marka w ogóle nie pojawia się. Sprawdź czy zapytania są trafne, a potem twórz dedykowane treści pod tę platformę."
+                      : "Najniższy SOV: " + worst.platform + " (" + worst.sov + "%) — potencjał do wzrostu. Twórz content odpowiadający na pytania typowe dla tej platformy."
+                  } />
+                )}
+                {/* Mentions vs Citations smart analysis */}
+                {totalQ > 0 && (() => {
+                  const ratio = totalM > 0 ? totalC / totalM : null;
+                  if (totalM === 0 && totalC === 0) return <Ins color={S.muted} i="○" t="Brak wzmianek i cytowań — marka niewidoczna dla AI. Zacznij od audytu treści i wdrożenia structured data." />;
+                  if (totalM === 0 && totalC > 0) return <Ins color={S.gold} i="!" t={"Marka cytowana " + totalC + "x jako źródło, ale AI nie zna jej nazwy. To typowy problem 'anonimowego eksperta' — dodaj entity signals: About Us, WikiData, wzmianki w mediach."} />;
+                  if (ratio !== null && ratio > 5) return <Ins color={S.sky} i="!" t={"Cytowania (" + totalC + ") znacznie przewyższają wzmianki (" + totalM + ") — AI używa strony jako źródła, ale nie 'uczy się' nazwy marki. Dodaj branded anchor texty i wzmianki w nagłówkach."} />;
+                  if (ratio !== null && ratio < 0.2 && totalM > 0) return <Ins color={S.purple} i="!" t={"Dużo wzmianek (" + totalM + ") ale mało cytowań (" + totalC + ") — AI zna markę, ale rzadko poleca stronę. Popraw tech SEO: szybkość, structured data, Core Web Vitals."} />;
+                  if (totalM > 0 && totalC > 0) return <Ins color={S.green} i="✓" t={"Wzmianki (" + totalM + ") i cytowania (" + totalC + ") — obecność potwierdzona. Pracuj nad zwiększeniem częstotliwości."} />;
+                  return null;
+                })()}
+                {/* Platform coverage */}
+                {(() => {
+                  const withData = PLATFORMS.filter(p => proc[p.id].total > 0);
+                  const withMentions = PLATFORMS.filter(p => proc[p.id].mentions > 0);
+                  if (withData.length === 0) return null;
+                  if (withMentions.length === 0) return <Ins color={S.coral} i="◈" t={"Dane z " + withData.length + " platform, ale 0 wzmianek. Sprawdź czy klucz marki jest poprawny (zakładka Import CSV)."} />;
+                  return <Ins color={S.sky} i="◈" t={(brand.name || "Marka") + " rozpoznawana na " + withMentions.length + "/" + withData.length + " platform z danymi." + (withMentions.length < withData.length ? " Brak wzmianek: " + withData.filter(p => !proc[p.id].mentions).map(p => p.short).join(", ") + "." : "")} />;
+                })()}
+                {allComps.length > 0 && (() => {
+                  const topC = allComps[0];
+                  const topCCount = compCounts[topC];
+                  if (topCCount > totalM * 2) return <Ins color={S.coral} i="⚔️" t={topC + " dominuje: " + topCCount + " wzm. vs " + totalM + " Twojej marki. Zbadaj ich content — jakie pytania pokrywają, których Ty nie masz."} />;
+                  if (topCCount > totalM) return <Ins color={S.gold} i="⚔️" t={topC + " nieznacznie wyprzedza (" + topCCount + " vs " + totalM + " wzm.). Do nadgonienia w ciągu 2-3 miesięcy intensywnych działań."} />;
+                  return <Ins color={S.green} i="⚔️" t={"Marka wyprzedza " + allComps.length + " konkurentów w AI. " + topC + ": " + topCCount + " wzm. vs " + totalM + " Twojej."} />;
+                })()}
               </div>
             </Card>
-            {/* Quick Wins */}
-            {topQW.length > 0 && (
-              <Card style={{ marginTop: 16, border: "1px solid " + S.gold + "33", background: "#0e1a0e" }}>
-                <CLabel style={{ color: S.gold }}>⚡ Quick Wins — Opportunity</CLabel>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  {topQW.map((w, i) => {
-                    if (w.type === "cited") return (
-                      <div key={i} style={{ padding: "12px 14px", background: S.sky + "0c", border: "1px solid " + S.sky + "33", borderRadius: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: S.sky, marginBottom: 4 }}>🔗 {w.platform.name} — cytowana, ale nie wymieniana</div>
-                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Citation Rate: <strong style={{ color: S.sky }}>{w.cR}%</strong> — marka cytowana jako źródło, ale AI nie wymienia jej z nazwy. Optymalizacja E-E-A-T i treści może szybko przełożyć się na wzrost wzmianek.</div>
-                      </div>
-                    );
-                    if (w.type === "low_mention") return (
-                      <div key={i} style={{ padding: "12px 14px", background: S.green + "0a", border: "1px solid " + S.green + "33", borderRadius: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: S.green, marginBottom: 4 }}>📈 {w.platform.name} — niski Mention Rate ({w.mR}%)</div>
-                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Obecność jest widoczna (Citation: {w.cR}%), ale AI rzadko wymienia markę. Rozbudowanie contentu FAQ i how-to może podnieść Mention Rate do 15-25%.</div>
-                      </div>
-                    );
-                    if (w.type === "low_sov") return (
-                      <div key={i} style={{ padding: "12px 14px", background: S.gold + "08", border: "1px solid " + S.gold + "33", borderRadius: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: S.gold, marginBottom: 4 }}>🎯 {w.platform.name} — SOV {w.sov}% (przestrzeń do wzrostu)</div>
-                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Marka pojawia się, ale zajmuje mały udział głosu. Tworzenie treści targetowanych pod zapytania tej platformy może realnie przesunąć SOV powyżej 30%.</div>
-                      </div>
-                    );
-                    if (w.type === "comp_gap") return (
-                      <div key={i} style={{ padding: "12px 14px", background: S.coral + "0a", border: "1px solid " + S.coral + "33", borderRadius: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: S.coral, marginBottom: 4 }}>⚔️ Gap vs. {w.comp} ({w.compCount} vs {w.brandCount} wzm.)</div>
-                        <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>Konkurent ma {w.compCount - w.brandCount} wzmianek więcej. Analiza zapytań, gdzie pojawia się {w.comp} a marka nie, może ujawnić luki contentowe do szybkiego wypełnienia.</div>
-                      </div>
-                    );
-                    return null;
-                  })}
-                </div>
-              </Card>
-            )}
-
             <Btn onClick={() => setTab("report")} style={{ marginTop: 22 }}>Generuj Raport →</Btn>
           </div>
         )}
