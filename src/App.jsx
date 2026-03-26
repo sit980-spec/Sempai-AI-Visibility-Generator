@@ -144,6 +144,7 @@ function parseAhrefsBuffer(buffer, brandKey, brandVariants, filename) {
   const mentionsIdx = headers.findIndex(h => h === "Mentions");
   const linkIdx = headers.findIndex(h => h === "Link URL");
   const kwIdx = headers.findIndex(h => h === "Keyword");
+  const volIdx = headers.findIndex(h => h === "Volume");
 
   if (mentionsIdx < 0) return null;
 
@@ -156,6 +157,7 @@ function parseAhrefsBuffer(buffer, brandKey, brandVariants, filename) {
     const mentionsRaw = (r[mentionsIdx] || "").toLowerCase();
     const linkRaw = (r[linkIdx] || "").toLowerCase();
     const keyword = r[kwIdx] || "";
+    const volume = parseInt(r[volIdx] || "0") || 0;
     // Check if ANY variant matches in Mentions
     const matchedVariant = variants.find(v => v && mentionsRaw.includes(v)) || null;
     const mentioned = !!matchedVariant;
@@ -166,7 +168,7 @@ function parseAhrefsBuffer(buffer, brandKey, brandVariants, filename) {
       .split(/[,\n]+/)
       .map(m => m.trim())
       .filter(m => m && !variants.some(v => m.includes(v)));
-    return { keyword, mentioned, cited, otherMentions, matchedVariant };
+    return { keyword, volume, mentioned, cited, otherMentions, matchedVariant };
   }).filter(r => r.keyword);
 
   // Count per variant for stats
@@ -185,7 +187,15 @@ function aggregatePlatform(rows, variantHits) {
   const citations = rows.filter(r => r.cited).length;
   const compSet = {};
   rows.forEach(r => { r.otherMentions.forEach(c => { compSet[c] = (compSet[c] || 0) + 1; }); });
-  return { total, mentions, citations, compSet, variantHits: variantHits || {} };
+  // Top keywords where brand IS mentioned (by volume desc)
+  const topBrand = rows.filter(r => r.mentioned)
+    .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+    .slice(0, 10).map(r => ({ kw: r.keyword, vol: r.volume || 0 }));
+  // Top keywords where brand NOT mentioned (opportunity — competitors present or high volume)
+  const topGap = rows.filter(r => !r.mentioned && r.otherMentions.length > 0)
+    .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+    .slice(0, 10).map(r => ({ kw: r.keyword, vol: r.volume || 0, comps: r.otherMentions.slice(0,2) }));
+  return { total, mentions, citations, compSet, variantHits: variantHits || {}, topBrand, topGap };
 }
 
 /* ── Particle background ───────────────────────────────────────────────────── */
@@ -318,7 +328,7 @@ const Tip = ({ active, payload, label }) => {
 
 /* ── Report HTML builder (NO nested template literals — uses array.join) ───── */
 function buildReport(args) {
-  const { brand, proc, totalQ, totalM, totalC, visM, visC, avgSOV, allComps, compCounts, best, worst } = args;
+  const { brand, proc, totalQ, totalM, totalC, visM, visC, avgSOV, allComps, compCounts, best, worst, editableComment, topBrandKws, topGapKws } = args;
   const date = new Date().toLocaleDateString("pl-PL", { year: "numeric", month: "long", day: "numeric" });
 
   const rows = PLATFORMS.map(p => {
@@ -412,13 +422,16 @@ function buildReport(args) {
     "</tbody></table></section>",
   ].join("") : "";
 
-  // General comment for client
+  // General comment for client — use editableComment if provided
+  const commentLines = editableComment !== null
+    ? editableComment.split("\n")
+    : null; // null = use auto paragraphs below
+
   const commentHtml = [
     "<section>",
     '<h2><span class="num">&#9733;</span> Komentarz analityczny</h2>',
     '<div class="comment-box">',
     '<div class="comment-title">Podsumowanie widoczności AI</div>',
-    '<div style="background:#fff8e6;border:1px solid #f5c842;border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:11px;color:#7a6000;line-height:1.5">⚠️ <strong>Uwaga:</strong> Komentarz analityczny i rekomendacje zostały wygenerowane automatycznie na podstawie danych liczbowych. Przed przekazaniem klientowi zweryfikuj czy wnioski odpowiadają specyfice jego branży i strategii.</div>',
     "<p>Niniejszy raport przedstawia wyniki analizy widoczności marki <strong>" + (brand.name || "klienta") + "</strong> w odpowiedziach generowanych przez modele AI. Analiza obejmuje <strong>" + totalQ.toLocaleString("pl-PL") + " zapytań</strong> na platformach: AI Overview, AI Mode, ChatGPT, Gemini, Perplexity i Copilot.</p>",
     // SOV paragraph - contextual
     (avgSOV >= 30
@@ -438,10 +451,21 @@ function buildReport(args) {
     })(),
     // Platforms paragraph
     (best ? "<p><strong>Najlepsza platforma: " + best.platform + "</strong> (SOV " + best.sov + "%). " + (best.sov < 10 ? "Mimo że jest najlepsza, SOV poniżej 10% to nadal poczatkowy etap — jest dużo miejsca na wzrost." : best.sov < 30 ? "Solidna baza do budowania dalszej widoczności." : "Silna pozycja do utrzymania.") + (worst && worst !== best && worst.sov === 0 ? " Platforma " + worst.platform + " wymaga osobnej strategii — marka jest całkowicie nieobecna mimo posiadania danych." : worst && worst !== best ? " Najsłabsza platforma: " + worst.platform + " (SOV " + worst.sov + "%) — warto przygotować treść w formatach preferowanych przez ten model." : "") + "</p>" : ""),
-    "<p><strong>Priorytety na 3-6 miesiecy:</strong> (1) " + (totalM === 0 && totalC > 0 ? "Zbudowanie entity recognition — Wikipedia/Wikidata, wzmianki w mediach z nazwa marki." : "Tworzenie tresci FAQ i how-to pod zapytania z najnizszym SOV.") + " (2) Wdrozenie schema markup (Organization, BreadcrumbList, FAQPage). (3) " + (allComps.length > 0 && compCounts[allComps[0]] > totalM ? "Analiza gap contentowego wzgledem " + allComps[0] + " (" + compCounts[allComps[0]] + " wzm.)." : "Regularne monitorowanie widocznosci i optymalizacja na biezaco.") + "</p>",
+    "<p><strong>Priorytety na 3-6 miesięcy:</strong> (1) " + (totalM === 0 && totalC > 0 ? "Zbudowanie entity recognition — Wikipedia/Wikidata, wzmianki w mediach z nazwą marki." : "Tworzenie treści FAQ i how-to pod zapytania z najniższym SOV.") + " (2) Wdrożenie schema markup (Organization, BreadcrumbList, FAQPage). (3) " + (allComps.length > 0 && compCounts[allComps[0]] > totalM ? "Analiza gap contentowego względem " + allComps[0] + " (" + compCounts[allComps[0]] + " wzm.)." : "Regularne monitorowanie widoczności i optymalizacja na bieżąco.") + "</p>",
     "</div>",
     "</section>",
-  ].join("");
+  ];
+  // If user edited the comment — replace auto paragraphs
+  const finalCommentHtml = commentLines
+    ? [
+        "<section>",
+        '<h2><span class="num">&#9733;</span> Komentarz analityczny</h2>',
+        '<div class="comment-box">',
+        '<div class="comment-title">Podsumowanie widoczności AI</div>',
+        commentLines.filter(Boolean).map(l => "<p>" + l + "</p>").join(""),
+        "</div></section>",
+      ].join("")
+    : commentHtml.join("");
 
   const insightsHtml = [
     '<div class="ig">',
@@ -470,16 +494,31 @@ function buildReport(args) {
     brand.industry ? " &middot; Bran\u017ca: <strong>" + brand.industry + "</strong>" : "",
     " &middot; Data: " + date + "</p></div>",
     "<div class=\"kpi-grid\">",
-    "<div class=\"kpi\" style=\"border-top-color:#2edf8f\"><div class=\"kl\">AI Share of Voice</div><div class=\"kv\" style=\"color:#2edf8f\">" + avgSOV + "%</div><div class=\"ks\">Srednia SOV platform</div><div class=\"pb-wrap\"><div class=\"pb\" style=\"width:" + Math.min(avgSOV, 100) + "%;background:#2edf8f\"></div></div></div>",
-    "<div class=\"kpi\" style=\"border-top-color:#4da6ff\"><div class=\"kl\">Visibility Score</div><div class=\"kv\" style=\"color:#4da6ff\">" + visM + "%</div><div class=\"ks\">Mention Rate</div><div class=\"pb-wrap\"><div class=\"pb\" style=\"width:" + Math.min(visM, 100) + "%;background:#4da6ff\"></div></div></div>",
-    "<div class=\"kpi\" style=\"border-top-color:#a78bfa\"><div class=\"kl\">Citation Score</div><div class=\"kv\" style=\"color:#a78bfa\">" + visC + "%</div><div class=\"ks\">Citation Rate</div><div class=\"pb-wrap\"><div class=\"pb\" style=\"width:" + Math.min(visC, 100) + "%;background:#a78bfa\"></div></div></div>",
+    "<div class=\"kpi\" style=\"border-top-color:#2edf8f\"><div class=\"kl\">AI Share of Voice</div><div class=\"kv\" style=\"color:#2edf8f\">" + avgSOV + "%</div><div class=\"ks\">" + (avgSOV >= 30 ? "Silna pozycja — marka często wymieniana" : avgSOV >= 10 ? "Umiarkowana widoczność — jest potencjał" : "Niska widoczność — priorytet działań") + "</div><div class=\"pb-wrap\"><div class=\"pb\" style=\"width:" + Math.min(avgSOV, 100) + "%;background:#2edf8f\"></div></div></div>",
+    "<div class=\"kpi\" style=\"border-top-color:#4da6ff\"><div class=\"kl\">Visibility Score</div><div class=\"kv\" style=\"color:#4da6ff\">" + visM + "%</div><div class=\"ks\">" + (visM >= 10 ? "AI często wymienia markę z nazwy" : visM >= 1 ? "AI sporadycznie wymienia markę" : "AI nie wymienia marki z nazwy") + "</div><div class=\"pb-wrap\"><div class=\"pb\" style=\"width:" + Math.min(visM, 100) + "%;background:#4da6ff\"></div></div></div>",
+    "<div class=\"kpi\" style=\"border-top-color:#a78bfa\"><div class=\"kl\">Citation Score</div><div class=\"kv\" style=\"color:#a78bfa\">" + visC + "%</div><div class=\"ks\">" + (visC >= 10 ? "Strona często cytowana jako źródło" : visC >= 1 ? "Strona sporadycznie cytowana" : "Strona rzadko cytowana przez AI") + "</div><div class=\"pb-wrap\"><div class=\"pb\" style=\"width:" + Math.min(visC, 100) + "%;background:#a78bfa\"></div></div></div>",
     "<div class=\"kpi\" style=\"border-top-color:#f5c842\"><div class=\"kl\">\u0141\u0105czne zapytania</div><div class=\"kv\" style=\"color:#f5c842\">" + totalQ.toLocaleString("pl-PL") + "</div><div class=\"ks\">" + totalM + " wzm. &middot; " + totalC + " cyt.</div></div>",
     "</div>",
     "<section><h2><span class=\"num\">01</span> AI Share of Voice \u2014 per platforma</h2>",
     "<table><thead><tr><th>Platforma</th><th>Zapyta\u0144</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead>",
     "<tbody>" + rowsHtml + "</tbody></table></section>",
     compHtml,
-    commentHtml,
+    // Top queries HTML
+    (() => {
+      if (!topBrandKws || !topGapKws || (topBrandKws.length === 0 && topGapKws.length === 0)) return "";
+      const brandRows = (topBrandKws || []).map(([kw, vol]) =>
+        "<tr><td>" + kw + "</td><td style=\"text-align:right;color:#1db872;font-weight:700\">" + (vol > 0 ? vol.toLocaleString("pl-PL") : "—") + "</td></tr>"
+      ).join("");
+      const gapRows = (topGapKws || []).map(([kw, {vol, comps}]) =>
+        "<tr><td>" + kw + "</td><td style=\"text-align:right;color:#e03050\">" + comps.join(", ") + "</td><td style=\"text-align:right;color:#4a7090;font-size:11px\">" + (vol > 0 ? vol.toLocaleString("pl-PL") : "—") + "</td></tr>"
+      ).join("");
+      return "<section><h2><span class=\"num\">03</span> Zapytania — obecność marki</h2>" +
+        "<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:20px\">" +
+        (brandRows ? "<div><h3 style=\"font-size:13px;font-weight:700;color:#1db872;margin-bottom:10px\">🎯 Zapytania z wzmianką marki</h3><table><thead><tr><th>Zapytanie</th><th style=\"text-align:right\">Wolumen</th></tr></thead><tbody>" + brandRows + "</tbody></table></div>" : "") +
+        (gapRows ? "<div><h3 style=\"font-size:13px;font-weight:700;color:#e03050;margin-bottom:10px\">⚠️ Luki — marka nieobecna</h3><table><thead><tr><th>Zapytanie</th><th style=\"text-align:right\">Wymienia</th><th style=\"text-align:right\">Vol.</th></tr></thead><tbody>" + gapRows + "</tbody></table></div>" : "") +
+        "</div></section>";
+    })(),
+    finalCommentHtml,
     "<section><h2><span class=\"num\">&#9733;</span> Kluczowe spostrze\u017cenia</h2>" + insightsHtml + "</section>",
     "<div class=\"footer\"><div><div class=\"fn\">sempai &middot; Let us perform!</div><div class=\"fs\">sempai.pl</div></div>",
     "<div style=\"font-size:11px;color:#8899aa\">Wygenerowano: " + date + "</div></div>",
@@ -504,6 +543,8 @@ export default function App() {
   const [variantInput, setVariantInput] = useState(""); // text field for adding custom
   const [allVariantHits, setAllVariantHits] = useState({});
   const [promptCopied, setPromptCopied] = useState(false);
+  const [unknownFiles, setUnknownFiles] = useState([]);
+  const [editableComment, setEditableComment] = useState(null); // null = auto-generated
 
   const autoKey = (brand.url || brand.name).toLowerCase()
     .replace(/^https?:\/\/(www\.)?/, "")
@@ -542,7 +583,17 @@ export default function App() {
     try {
       const result = parseAhrefsBuffer(buffer, brandKey, variantsInUse, filename);
       if (!result || !result.platformId) {
-        setErrors(e => [...e, "Nie rozpoznano platformy w pliku: " + filename]);
+        // Show diagnostic info: what headers were found
+        const diagText = decodeBuffer(buffer);
+        const diagRows = parseDelimited(diagText);
+        const diagHeaders = diagRows.length > 0 ? diagRows[0].map(h => h.replace(/^"|"$/g,"").trim()).filter(Boolean) : [];
+        const models = diagRows.length > 1 && diagHeaders.includes("Model")
+          ? [...new Set(diagRows.slice(1,6).map(r => r[diagHeaders.indexOf("Model")] || "").filter(Boolean))]
+          : [];
+        const headerStr = diagHeaders.slice(0,8).join(", ");
+        const modelStr = models.length > 0 ? " | Model: " + models.join(", ") : "";
+        setErrors(e => [...e, "Nie rozpoznano platformy: " + filename + " | Nagłówki: " + headerStr + modelStr]);
+        setUnknownFiles(prev => [...prev, { filename, headers: diagHeaders, models }]);
         return;
       }
       const agg = aggregatePlatform(result.rows, result.variantHits);
@@ -555,6 +606,7 @@ export default function App() {
       setLoadedFiles(f => ({ ...f, [result.platformId]: filename }));
       setRawBuffers(rb => ({ ...rb, [filename]: buffer }));
       setErrors(e => e.filter(x => !x.includes(filename)));
+      setUnknownFiles(prev => prev.filter(u => u.filename !== filename));
       // Collect all mention values for brand picker
       const text = decodeBuffer(buffer);
       const allRows = parseDelimited(text);
@@ -576,8 +628,17 @@ export default function App() {
 
   const proc = {};
   PLATFORMS.forEach(p => {
-    proc[p.id] = parsedData[p.id] || { total: 0, mentions: 0, citations: 0, compSet: {} };
+    proc[p.id] = parsedData[p.id] || { total: 0, mentions: 0, citations: 0, compSet: {}, topBrand: [], topGap: [] };
   });
+
+  // Merge top keywords across all platforms
+  const kwBrandMap = {}, kwGapMap = {};
+  PLATFORMS.forEach(p => {
+    (proc[p.id].topBrand || []).forEach(({ kw, vol }) => { if (!kwBrandMap[kw] || kwBrandMap[kw] < vol) kwBrandMap[kw] = vol; });
+    (proc[p.id].topGap || []).forEach(({ kw, vol, comps }) => { if (!kwGapMap[kw]) kwGapMap[kw] = { vol, comps }; });
+  });
+  const topBrandKws = Object.entries(kwBrandMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+  const topGapKws = Object.entries(kwGapMap).sort((a,b) => b[1].vol-a[1].vol).slice(0, 8);
 
   const compCounts = {};
   PLATFORMS.forEach(p => {
@@ -660,12 +721,13 @@ export default function App() {
     Cytowania: proc[p.id].total > 0 ? parseFloat(((proc[p.id].citations / proc[p.id].total) * 100).toFixed(1)) : 0,
   }));
 
+  const buildArgs = () => ({ brand, proc, totalQ, totalM, totalC, visM, visC, avgSOV, allComps, compCounts, best, worst, editableComment, topBrandKws, topGapKws });
   const openReport = () => {
-    const html = buildReport({ brand, proc, totalQ, totalM, totalC, visM, visC, avgSOV, allComps, compCounts, best, worst });
+    const html = buildReport(buildArgs());
     window.open(URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" })), "_blank");
   };
   const downloadReport = () => {
-    const html = buildReport({ brand, proc, totalQ, totalM, totalC, visM, visC, avgSOV, allComps, compCounts, best, worst });
+    const html = buildReport(buildArgs());
     const a = document.createElement("a");
     a.href = "data:text/html;charset=utf-8," + encodeURIComponent(html);
     a.download = "Sempai_AIVisibility_" + (brand.name || "Raport") + "_" + new Date().toISOString().slice(0, 10) + ".html";
@@ -809,7 +871,12 @@ export default function App() {
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: S.coral + "22", border: "2px solid " + S.coral + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: S.coral, flexShrink: 0 }}>3</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: S.text, marginBottom: 6 }}>Kliknij <span style={{ color: S.coral }}>Export</span> → pobierz jako CSV</div>
-                  <div style={{ fontSize: 12, color: S.muted, lineHeight: 1.7, marginBottom: 10 }}>W prawym górnym rogu kliknij przycisk <strong style={{ color: S.text }}>Export</strong>. Wybierz format CSV. Ahrefs eksportuje domyślnie w formacie UTF-16 z separatorem TAB — to jest OK, narzędzie obsługuje oba formaty automatycznie.</div>
+                  <div style={{ fontSize: 12, color: S.muted, lineHeight: 1.7, marginBottom: 10 }}>
+                    Kliknij <strong style={{ color: S.coral }}>Export</strong> — są dwa przyciski:<br/>
+                    <strong style={{ color: S.text }}>① Górny Export</strong> (prawy górny róg tabeli) eksportuje aktualny widok.<br/>
+                    <strong style={{ color: S.text }}>② Dolny Export</strong> (przy liczbie wyników, np. "489 results") eksportuje <strong style={{ color: S.green }}>WSZYSTKIE wyniki</strong> z pełną listą zapytań — ten jest potrzebny do analizy.<br/>
+                    Ahrefs eksportuje w UTF-16 z TAB — narzędzie obsługuje oba formaty automatycznie.
+                  </div>
                   <div style={{ display: "flex", gap: 10 }}>
                     <div style={{ padding: "8px 12px", background: S.navy1, borderRadius: 8, fontSize: 11, color: S.muted, border: "1px solid " + S.border }}>
                       <span style={{ color: S.green }}>✓</span> UTF-16 (domyślny Ahrefs)
@@ -1087,7 +1154,44 @@ export default function App() {
               </Card>
             )}
 
-            {errors.length > 0 && (
+            {/* Unknown files - manual platform assign */}
+            {unknownFiles.length > 0 && (
+              <div style={{ marginTop: 16, padding: "14px 16px", background: S.gold + "0a", border: "1px solid " + S.gold + "33", borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: S.gold, fontWeight: 700, marginBottom: 10 }}>⚠️ Nie rozpoznano platformy — przypisz ręcznie:</div>
+                {unknownFiles.map((uf, fi) => (
+                  <div key={fi} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 10, color: S.muted, marginBottom: 6, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      📄 {uf.filename}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#2a4060", marginBottom: 8 }}>
+                      Nagłówki: <span style={{ color: S.muted }}>{uf.headers.slice(0,6).join(", ")}</span>
+                      {uf.models.length > 0 && <span> | Model: <strong style={{ color: S.text }}>{uf.models.join(", ")}</strong></span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {PLATFORMS.map(p => (
+                        <button key={p.id} onClick={() => {
+                          // Re-parse this file forcing the platform
+                          const buf = Object.entries(rawBuffers).find(([k]) => k === uf.filename)?.[1];
+                          if (!buf) return;
+                          try {
+                            const r = parseAhrefsBuffer(buf, brandKey, variantsInUse, uf.filename);
+                            const agg = aggregatePlatform(r ? r.rows : [], r ? r.variantHits : {});
+                            setParsedData(d => ({ ...d, [p.id]: agg }));
+                            setLoadedFiles(f => ({ ...f, [p.id]: uf.filename }));
+                            setUnknownFiles(prev => prev.filter((_, i) => i !== fi));
+                            setErrors(e => e.filter(x => !x.includes(uf.filename)));
+                          } catch(_) {}
+                        }}
+                          style={{ padding: "4px 12px", borderRadius: 14, fontSize: 11, fontWeight: 700, cursor: "pointer", background: p.color + "18", border: "1px solid " + p.color + "44", color: p.color }}>
+                          {p.icon} {p.short}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {errors.length > 0 && unknownFiles.length === 0 && (
               <div style={{ marginTop: 16, padding: "12px 16px", background: S.coral + "0f", border: "1px solid " + S.coral + "33", borderRadius: 10 }}>
                 {errors.map((e, i) => <div key={i} style={{ fontSize: 12, color: S.coral }}>{e}</div>)}
               </div>
@@ -1418,36 +1522,97 @@ export default function App() {
         )}
 
         {/* REPORT */}
-        {tab === "report" && (
+        {tab === "report" && (() => {
+          // Build auto comment text for editing
+          const autoCommentText = [
+            "Klient: " + (brand.name || "[marka]") + (brand.url ? " (" + brand.url + ")" : "") + (brand.industry ? " | Branża: " + brand.industry : ""),
+            "",
+            "Niniejszy raport przedstawia wyniki analizy widoczności marki w odpowiedziach generowanych przez modele AI. Analiza obejmuje " + totalQ.toLocaleString("pl-PL") + " zapytań na 6 platformach AI.",
+            "",
+            "AI Share of Voice: " + avgSOV + "% — " + (avgSOV >= 30 ? "silna pozycja wśród konkurentów w AI." : avgSOV >= 10 ? "umiarkowana widoczność — wyraźny potencjał wzrostu." : "niska widoczność — kluczowe działania contentowe i entity building."),
+            "Mention Rate: " + fmtPctSimple(visM) + " (" + totalM + " wzmianek na " + totalQ.toLocaleString("pl-PL") + " zapytań)",
+            "Citation Rate: " + fmtPctSimple(visC) + " (" + totalC + " cytowań)",
+            "",
+            (totalM === 0 && totalC > 0 ? "Marka jest cytowana przez AI jako źródło (" + totalC + "x), ale nie jest wymieniana z nazwy — typowy problem 'anonimowego eksperta'. Priorytet: entity signals (Wikipedia, Wikidata, About Us z nazwą marki)." :
+             totalM > 0 && totalC > totalM * 5 ? "Wysoka dysproporcja: AI cytuje stronę " + totalC + "x vs " + totalM + " wzmianek nazwy. Priorytet: branded anchor texty, wzmianki w mediach branżowych." :
+             totalM > 0 ? "Marka widoczna — " + totalM + " wzmianek. Kolejny krok: zwiększenie częstotliwości przez dedykowany content plan (FAQ, how-to, porównania)." :
+             "Brak wzmianek i cytowań — marka niewidoczna dla AI. Start od structured data i treści odpowiadających na zapytania branżowe."),
+            "",
+            best ? "Najlepsza platforma: " + best.platform + " (SOV " + best.sov + "%)" + (worst && worst !== best ? " | Do poprawy: " + worst.platform + " (SOV " + worst.sov + "%)" : "") : "",
+            allComps.length > 0 ? "Wykryci konkurenci: " + allComps.slice(0,4).map(c => c + " (" + compCounts[c] + " wzm.)").join(", ") : "",
+            "",
+            "Rekomendacje na 3-6 miesięcy: " + (totalM === 0 && totalC > 0 ? "(1) Wikipedia/Wikidata — zbuduj entity graph. (2) Wzmianki z nazwą marki w mediach branżowych. (3) Sekcja About z jasną nazwą i opisem marki." : "(1) FAQ i how-to pod zapytania z niskim SOV. (2) Schema markup (Organization, FAQPage). (3) " + (allComps.length > 0 && compCounts[allComps[0]] > totalM ? "Analiza gap vs " + allComps[0] + " — stwórz odpowiedzi na te same zapytania." : "Monitoring i optymalizacja wzmianek na bieżąco.")),
+          ].filter(Boolean).join("\n");
+
+          const commentText = editableComment !== null ? editableComment : autoCommentText;
+
+          return (
           <div>
             <STitle>Raport statyczny</STitle>
-            <p style={{ fontSize: 13, color: S.muted, marginBottom: 24 }}>
-              Otwórz podgląd → <strong style={{ color: S.text }}>Ctrl+P → Zapisz jako PDF</strong>. Lub pobierz .html i otwórz w Word.
-            </p>
-            <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
+
+            {/* Editable comment */}
+            <Card style={{ marginBottom: 20, border: "1px solid " + S.coral + "33" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <CLabel>✏️ Komentarz analityczny — edytuj przed wygenerowaniem</CLabel>
+                {editableComment !== null && (
+                  <button onClick={() => setEditableComment(null)}
+                    style={{ fontSize: 11, color: S.muted, background: "transparent", border: "1px solid " + S.border, borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
+                    ↺ Przywróć auto
+                  </button>
+                )}
+              </div>
+              <textarea
+                value={commentText}
+                onChange={e => setEditableComment(e.target.value)}
+                style={{ width: "100%", boxSizing: "border-box", background: S.navy1, border: "1px solid " + S.border, borderRadius: 8, padding: "12px 14px", color: S.text, fontSize: 12, lineHeight: 1.7, outline: "none", resize: "vertical", minHeight: 220, fontFamily: "inherit" }}
+              />
+              <div style={{ fontSize: 10, color: S.muted, marginTop: 6 }}>Tekst pojawi się w sekcji komentarza analitycznego w raporcie HTML. Każda linia = osobny akapit.</div>
+            </Card>
+
+            {/* Top queries */}
+            {(topBrandKws.length > 0 || topGapKws.length > 0) && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
+                {topBrandKws.length > 0 && (
+                  <Card style={{ border: "1px solid " + S.green + "33" }}>
+                    <CLabel>🎯 Top zapytania z wzmianką marki</CLabel>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {topBrandKws.map(([kw, vol], i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: S.navy1, borderRadius: 6 }}>
+                          <span style={{ fontSize: 12, color: S.text, flex: 1, marginRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kw}</span>
+                          {vol > 0 && <span style={{ fontSize: 10, color: S.muted, fontFamily: "monospace", flexShrink: 0 }}>{vol.toLocaleString("pl-PL")}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+                {topGapKws.length > 0 && (
+                  <Card style={{ border: "1px solid " + S.coral + "33" }}>
+                    <CLabel>⚠️ Luki — konkurenci wymieniani, marka nie</CLabel>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {topGapKws.map(([kw, {vol, comps}], i) => (
+                        <div key={i} style={{ padding: "6px 10px", background: S.navy1, borderRadius: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+                            <span style={{ fontSize: 12, color: S.text, flex: 1, marginRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kw}</span>
+                            {vol > 0 && <span style={{ fontSize: 10, color: S.muted, fontFamily: "monospace", flexShrink: 0 }}>{vol.toLocaleString("pl-PL")}</span>}
+                          </div>
+                          <div style={{ fontSize: 10, color: S.coral }}>AI wymienia: {comps.join(", ")}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
               <button onClick={openReport} style={{ padding: "12px 24px", background: S.green + "18", border: "1px solid " + S.green + "55", borderRadius: 10, color: S.green, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>🔍 Otwórz podgląd</button>
               <button onClick={downloadReport} style={{ padding: "12px 24px", background: S.sky + "18", border: "1px solid " + S.sky + "55", borderRadius: 10, color: S.sky, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>⬇ Pobierz .html</button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-              {[
-                { n: "01", title: "AI Share of Voice", desc: "Tabela SOV z progress barami i color-coded wskaźnikami per platforma", color: S.green },
-                { n: "02", title: "Analiza konkurencji", desc: allComps.length > 0 ? allComps.length + " konkurentów z benchmarkiem" : "Brak — wgraj pliki CSV", color: S.sky },
-                { n: "★", title: "Komentarz analityczny", desc: "Gotowy tekst dla klienta — SOV, Mentions, Citations, strategia", color: S.coral },
-                { n: "★", title: "Spostrzeżenia", desc: "Automatyczne wnioski i rekomendacje", color: S.gold },
-              ].map((s, i) => (
-                <div key={i} style={{ padding: "14px 16px", background: s.color + "08", border: "1px solid " + s.color + "22", borderRadius: 10, display: "flex", gap: 12 }}>
-                  <span style={{ color: s.color, fontWeight: 900, fontSize: 16, flexShrink: 0, minWidth: 24 }}>{s.n}</span>
-                  <div>
-                    <div style={{ fontWeight: 700, color: S.text, fontSize: 13, marginBottom: 2 }}>{s.title}</div>
-                    <div style={{ fontSize: 11, color: S.muted, lineHeight: 1.5 }}>{s.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+
             <Card>
               <CLabel>Podgląd KPI</CLabel>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
-                {[{ l: "AI SOV", v: fmtPct(avgSOV), c: S.green }, { l: "Mentions", v: fmtPct(visM), c: S.sky }, { l: "Citations", v: fmtPct(visC), c: S.purple }, { l: "Zapytań", v: totalQ, c: S.gold }].map((k, i) => (
+                {[{ l: "AI SOV", v: fmtPctSimple(avgSOV), c: S.green }, { l: "Mentions", v: fmtPct(visM, totalQ), c: S.sky }, { l: "Citations", v: fmtPct(visC, totalQ), c: S.purple }, { l: "Zapytań", v: totalQ, c: S.gold }].map((k, i) => (
                   <div key={i} style={{ textAlign: "center", padding: "12px", background: S.navy1, borderRadius: 8, border: "1px solid " + k.c + "22" }}>
                     <div style={{ fontSize: 9, color: S.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 4 }}>{k.l}</div>
                     <div style={{ fontSize: 22, fontWeight: 900, color: k.c }}>{k.v}</div>
@@ -1456,7 +1621,8 @@ export default function App() {
               </div>
             </Card>
           </div>
-        )}
+          );
+        })()}
 
         {/* PROMPT */}
         {tab === "prompt" && (
