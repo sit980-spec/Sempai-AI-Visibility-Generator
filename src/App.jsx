@@ -659,9 +659,9 @@ export default function App() {
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
               {[
-                {icon:"💬",title:"Wzmianki (Mentions)",color:S.green,def:"AI napisał: "...polecamy Ostry Sklep..." — to jest wzmianka. Marka wymieniona z nazwy w odpowiedzi AI."},
-                {icon:"🔗",title:"Cytowania (Citations)",color:S.sky,def:"AI dodał link do Twojej strony jako źródło. Możesz być cytowany bez wymienienia nazwy — to "anonimowy ekspert"."},
-                {icon:"📊",title:"AI Share of Voice (SOV)",color:S.purple,def:"Twoje wzmianki ÷ (Twoje + wzmianki WSZYSTKICH konkurentów) × 100. Twój "kawałek tortu" wśród marek w AI."},
+                {icon:"💬",title:"Wzmianki (Mentions)",color:S.green,def:"AI napisał: '...polecamy Ostry Sklep...' — to jest wzmianka. Marka wymieniona z nazwy w odpowiedzi AI."},
+                {icon:"🔗",title:"Cytowania (Citations)",color:S.sky,def:"AI dodał link do Twojej strony jako źródło. Możesz być cytowany bez wymienienia nazwy — to 'anonimowy ekspert'."},
+                {icon:"📊",title:"AI Share of Voice (SOV)",color:S.purple,def:"Twoje wzmianki ÷ (Twoje + wzmianki WSZYSTKICH konkurentów) × 100. Twój 'kawałek tortu' wśród marek w AI."},
               ].map((x,i)=>(
                 <div key={i} style={{padding:"12px 14px",background:"#040d18",border:"1px solid "+x.color+"33",borderRadius:10}}>
                   <div style={{fontSize:18,marginBottom:7}}>{x.icon}</div>
