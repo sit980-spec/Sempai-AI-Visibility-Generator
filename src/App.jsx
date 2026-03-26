@@ -198,7 +198,7 @@ function parseFile(buffer, filename, brandVariants) {
     // ── Metric 1: Sentiment — analyze response context around brand mention ──
     if (mentioned && respRaw) {
       // Find brand context window (200 chars around mention)
-      const bIdx = bv.reduce((fi, v) => { const i = respRaw.indexOf(v); return i >= 0 && (fi < 0 || i < fi) ? i : fi; }, -1);
+      const bIdx = bv.reduce((fi, v) => { const pos = respRaw.indexOf(v); return pos >= 0 && (fi < 0 || pos < fi) ? pos : fi; }, -1);
       const ctx = bIdx >= 0 ? respRaw.slice(Math.max(0, bIdx-150), bIdx+150) : respRaw.slice(0, 300);
       const hasPos = posWords.some(w => ctx.includes(w));
       const hasNeg = negWords.some(w => ctx.includes(w));
@@ -216,8 +216,8 @@ function parseFile(buffer, filename, brandVariants) {
 
     // ── Metric 3: Control Ratio — own vs external links ─────────────────────
     if (linkRaw.trim()) {
-      linkRaw.split("\n").forEach(l => {
-        l = l.trim();
+      linkRaw.split("\n").forEach(rawLink => {
+        const l = rawLink.trim();
         if (!l) return;
         totalLinks++;
         if (domainKey && l.toLowerCase().includes(domainKey)) ownedLinks++;
