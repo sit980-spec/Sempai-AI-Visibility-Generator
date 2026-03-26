@@ -521,14 +521,16 @@ export default function App() {
         if(!r.platformId){
           setUnknownFiles(u=>[...u.filter(x=>x.filename!==filename),{filename,headers:r.headers||[],error:r.error}]);
           setErrors(e=>[...e.filter(x=>!x.includes(filename)),filename+": "+(r.error||"Nieznana platforma")]);
-        } else if(r.platformId==="ai_overview" && files["ai_overview"]?.filename && files["ai_overview"].filename!==filename) {
-          // Conflict: AI Overview slot already taken — AI Mode has same headers!
-          // Add to unknown so user can manually pick ai_mode
+        } else if(r.platformId==="ai_overview") {
+          // ZAWSZE pytaj użytkownika: AI Overview czy AI Mode?
+          // Ahrefs eksportuje oba z identycznym nagłówkiem "AI Overview"
           setUnknownFiles(u=>[...u.filter(x=>x.filename!==filename),{
-            filename, headers:r.headers||[], 
+            filename, headers:r.headers||[],
             error:null,
             conflict:true,
-            conflictNote:"Ten plik ma nagłówek \"AI Overview\" — dokładnie taki sam jak eksport AI Overview z Ahrefs. To ograniczenie platformy Ahrefs: eksportuje AI Mode z identycznym formatem i nie da się tego automatycznie rozróżnić. Jeśli eksportowałeś ten plik wybierając filtr AI Mode w Ahrefs, kliknij M AI Mode poniżej. Jeśli to był AI Overview — kliknij G AI Overview."
+            alwaysAsk:true,
+            rows:r.total,
+            conflictNote:"Ten plik ma nagłówek AI Overview — ale Ahrefs używa DOKŁADNIE TEGO SAMEGO formatu dla AI Mode. Nie da się tego automatycznie rozróżnić. Wybierz właściwą platformę:"
           }]);
         } else {
           setFiles(f=>({...f,[r.platformId]:{filename,...r}}));
@@ -664,7 +666,7 @@ export default function App() {
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
               {[
-                {icon:"💬",title:"Wzmianki (Mentions)",color:S.green,def:"AI napisał: '...polecamy Ostry Sklep...' — to jest wzmianka. Marka wymieniona z nazwy w odpowiedzi AI."},
+                {icon:"💬",title:"Wzmianki (Mentions)",color:S.green,def:"AI napisał: '...polecamy Ostry Sklep...' — to jest wzmianka. Marka wymieniona wprost z nazwy w odpowiedzi AI."},
                 {icon:"🔗",title:"Cytowania (Citations)",color:S.sky,def:"AI dodał link do Twojej strony jako źródło. Możesz być cytowany bez wymienienia nazwy — to 'anonimowy ekspert'."},
                 {icon:"📊",title:"AI Share of Voice (SOV)",color:S.purple,def:"Twoje wzmianki ÷ (Twoje + wzmianki WSZYSTKICH konkurentów) × 100. Twój 'kawałek tortu' wśród marek w AI."},
               ].map((x,i)=>(
@@ -686,11 +688,11 @@ export default function App() {
             </div>
           </InfoBox>
           <InfoBox n="2" color={S.green} title="Wybierz JEDNĄ platformę AI z filtra (np. Copilot)">
-            Na górze strony kliknij filtr i wybierz <strong style={{color:S.text}}>jedną platformę</strong> (np. Copilot). Każdą platformę eksportujesz osobno do osobnego pliku.
+            Na górze strony kliknij filtr i wybierz <strong style={{color:S.text}}>jedną platformę</strong> (np. Copilot). Każdą platformę eksportujesz osobno jako osobny plik CSV.
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:9}}>
               {PLATFORMS.map(p=><span key={p.id} style={{padding:"3px 11px",borderRadius:12,fontSize:11,fontWeight:700,background:p.color+"22",border:"1px solid "+p.color+"55",color:p.color}}>{p.icon} {p.name}</span>)}
             </div>
-            <div style={{marginTop:9,fontSize:11,color:"#6090a8"}}>AI Overview i AI Mode to dwa różne produkty Google — eksportuj je oddzielnie jako dwa osobne pliki!</div>
+            <div style={{marginTop:9,fontSize:11,color:"#6090a8"}}>Uwaga: AI Overview i AI Mode wyglądają identycznie w Ahrefs — po wgraniu każdego pliku z nagłówkiem AI Overview zapytamy Cię który to jest.</div>
           </InfoBox>
           <InfoBox n="3" color={S.coral} title='Kliknij Export przy LICZBIE WYNIKÓW na dole — nie przy tabeli'>
             <strong style={{color:"#ff8898"}}>Ważne: są dwa przyciski Export.</strong> Chcesz ten przy liczbie wyników (np. <em style={{color:S.text}}>"489 results"</em>) — on eksportuje <strong style={{color:S.text}}>WSZYSTKIE zapytania</strong>. Ten w prawym górnym rogu tabeli eksportuje tylko to co widać — nie używaj go.
@@ -838,16 +840,36 @@ export default function App() {
             </div>;})}
           </div>}
           {unknownFiles.length>0&&<div style={{marginBottom:12,padding:"13px 15px",background:S.gold+"0a",border:"1px solid "+S.gold+"33",borderRadius:10}}>
-            <div style={{fontSize:11,color:S.gold,fontWeight:700,marginBottom:9}}>⚠️ Nie rozpoznano platformy — kliknij właściwą:</div>
+            <div style={{fontSize:13,fontWeight:800,color:S.gold,marginBottom:5}}>⚠️ Wymagane przypisanie platformy *</div><div style={{fontSize:11,color:"#a08030",marginBottom:12,lineHeight:1.6}}>Zaznaczone pliki wymagają ręcznego wskazania platformy. Bez tego dane nie zostaną wczytane.</div>
             {unknownFiles.map((uf,fi)=>(
-  <div key={fi} style={{marginBottom:12}}>
-    <div style={{fontSize:10,color:"#7aaabf",marginBottom:4,fontFamily:"monospace"}}>📄 {uf.filename}</div>
-    {uf.conflictNote&&<div style={{padding:"9px 12px",background:"#0f0e00",border:"1px solid "+S.gold+"55",borderRadius:7,marginBottom:8,fontSize:12,color:"#d4a820",lineHeight:1.7}}>{uf.conflictNote}</div>}
-    {!uf.conflict&&<div style={{fontSize:10,color:"#5080a0",marginBottom:7}}>Nagłówki pliku: <span style={{color:"#7aaabf"}}>{(uf.headers||[]).slice(0,6).join(", ")}</span></div>}
-    <div style={{fontSize:11,color:"#9abfd0",marginBottom:7}}>Kliknij właściwą platformę:</div>
-    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>{PLATFORMS.map(p=><button key={p.id} onClick={()=>assignPlatform(uf.filename,p.id)} style={{padding:"6px 14px",borderRadius:12,fontSize:11,fontWeight:700,cursor:"pointer",background:uf.conflict&&p.id==="ai_mode"?p.color+"44":p.color+"18",border:"2px solid "+(uf.conflict&&p.id==="ai_mode"?p.color:p.color+"33"),color:p.color,boxShadow:uf.conflict&&p.id==="ai_mode"?"0 0 8px "+p.color+"44":"none"}}>{p.icon} {p.name}</button>)}</div>
-  </div>
-))}
+              <div key={fi} style={{marginBottom:16,background:"#0a0800",border:"1px solid "+S.gold+"44",borderRadius:10,padding:"14px 16px"}}>
+                <div style={{fontSize:11,color:"#7aaabf",marginBottom:8,fontFamily:"monospace",display:"flex",alignItems:"center",gap:8}}>
+                  <span>📄</span>
+                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{uf.filename}</span>
+                  {uf.rows&&<span style={{fontSize:10,color:"#5090a8",background:"#030c18",borderRadius:4,padding:"1px 7px",flexShrink:0}}>{(uf.rows||0).toLocaleString("pl-PL")} zapytań</span>}
+                </div>
+                {uf.conflictNote&&<div style={{padding:"10px 14px",background:"#0f0e00",border:"1px solid "+S.gold+"55",borderRadius:8,marginBottom:12,fontSize:12,color:"#d4a820",lineHeight:1.7}}>{uf.conflictNote}</div>}
+                {!uf.conflict&&<div style={{fontSize:11,color:"#5080a0",marginBottom:10}}>Nagłówki: <span style={{color:"#7aaabf"}}>{(uf.headers||[]).slice(0,6).join(", ")}</span></div>}
+                {uf.conflict ? (
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    {[PLATFORMS.find(p=>p.id==="ai_overview"),PLATFORMS.find(p=>p.id==="ai_mode")].filter(Boolean).map(p=>(
+                      <button key={p.id} onClick={()=>assignPlatform(uf.filename,p.id)} style={{padding:"14px 16px",borderRadius:10,fontSize:13,fontWeight:800,cursor:"pointer",background:p.color+"20",border:"2px solid "+p.color+"66",color:p.color,textAlign:"left",transition:"all .15s"}}>
+                        <div style={{fontSize:22,marginBottom:6}}>{p.icon}</div>
+                        <div style={{fontSize:13,fontWeight:800,marginBottom:3}}>{p.name}</div>
+                        <div style={{fontSize:11,color:p.color+"aa",fontWeight:400,lineHeight:1.5}}>
+                          {p.id==="ai_overview" ? "Google AI Overview — kafelki z odpowiedzią AI w zwykłych wynikach wyszukiwania" : "Google AI Mode — osobny tryb wyszukiwania z pełną odpowiedzią AI"}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:11,color:"#9abfd0",marginBottom:8}}>Kliknij właściwą platformę:</div>
+                    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>{PLATFORMS.map(p=><button key={p.id} onClick={()=>assignPlatform(uf.filename,p.id)} style={{padding:"6px 14px",borderRadius:10,fontSize:11,fontWeight:700,cursor:"pointer",background:p.color+"18",border:"1px solid "+p.color+"44",color:p.color}}>{p.icon} {p.name}</button>)}</div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>}
           {errors.length>0&&unknownFiles.length===0&&<div style={{marginBottom:12,padding:"9px 13px",background:S.coral+"0f",border:"1px solid "+S.coral+"33",borderRadius:8}}>{errors.map((e,i)=><div key={i} style={{fontSize:11,color:S.coral}}>{e}</div>)}</div>}
           <button onClick={()=>setTab("dashboard")} style={{padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Dashboard →</button>
@@ -1452,16 +1474,20 @@ export default function App() {
                               <input value={rec.note} onChange={e=>updateRec(rec.id,"note",e.target.value)}
                                 placeholder="Opcjonalny komentarz / uzasadnienie dla klienta (np. bo Militaria.pl pojawia się przy tym zapytaniu 500 razy)"
                                 style={{width:"100%",boxSizing:"border-box",background:"#020810",border:"1px solid #0e2030",borderRadius:6,padding:"6px 10px",color:"#7aabbf",fontSize:11,outline:"none",fontFamily:"inherit",marginBottom:rec.subs.length>0?8:0}}/>
-                              {rec.subs.map((sub,si)=>(
-                                <div key={sub.id} style={{display:"flex",alignItems:"center",gap:7,marginTop:5}}>
-                                  <span style={{fontSize:11,color:"#4a7090",minWidth:30}}>{ri+1}.{si+1}.</span>
-                                  <input value={sub.text} onChange={e=>updateSub(rec.id,sub.id,e.target.value)}
-                                    placeholder={"Podpunkt "+(si+1)}
-                                    style={{flex:1,background:"#010608",border:"1px solid #0a1a28",borderRadius:5,padding:"5px 9px",color:"#90b8cc",fontSize:11,outline:"none",fontFamily:"inherit"}}/>
-                                  <button onClick={()=>removeSub(rec.id,sub.id)} style={{color:"#2a4050",background:"none",border:"none",cursor:"pointer",fontSize:14,padding:0}}>×</button>
-                                </div>
-                              ))}
-                              <button onClick={()=>addSub(rec.id)} style={{marginTop:6,fontSize:10,color:"#3a6070",background:"none",border:"1px dashed #1a3040",borderRadius:5,padding:"3px 9px",cursor:"pointer"}}>+ podpunkt</button>
+                              {rec.subs.length>0&&<div style={{marginTop:8,borderLeft:"2px solid #1a3050",paddingLeft:10}}>
+                                {rec.subs.map((sub,si)=>(
+                                  <div key={sub.id} style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+                                    <span style={{fontSize:10,color:"#3a6080",minWidth:28,flexShrink:0}}>{ri+1}.{si+1}.</span>
+                                    <input value={sub.text} onChange={e=>updateSub(rec.id,sub.id,e.target.value)}
+                                      placeholder={"Podpunkt "+(si+1)+" — uszczegółowienie"}
+                                      style={{flex:1,background:"#020c18",border:"1px solid #0e2030",borderRadius:6,padding:"5px 10px",color:"#90b8cc",fontSize:11,outline:"none",fontFamily:"inherit"}}/>
+                                    <button onClick={()=>removeSub(rec.id,sub.id)} title="Usuń podpunkt" style={{color:"#2a4050",background:"none",border:"none",cursor:"pointer",fontSize:15,padding:"0 2px",lineHeight:1}}>×</button>
+                                  </div>
+                                ))}
+                              </div>}
+                              <button onClick={()=>addSub(rec.id)} style={{marginTop:7,fontSize:10,color:"#4a8090",background:"#030c18",border:"1px solid #1a3040",borderRadius:5,padding:"4px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+                                <span style={{fontSize:12}}>+</span> Dodaj podpunkt
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -1549,5 +1575,5 @@ function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,globalS
   const bHtml=topBrandKws.length>0?"<table><thead><tr><th>Zapytanie</th><th style='text-align:right'>Wolumen</th></tr></thead><tbody>"+topBrandKws.map(([kw,vol])=>"<tr><td>"+kw+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
   const gHtml=topGapKws.length>0?"<table><thead><tr><th>Zapytanie</th><th>AI wymienia</th><th style='text-align:right'>Vol.</th></tr></thead><tbody>"+topGapKws.map(([kw,{vol,comps}])=>"<tr><td>"+kw+"</td><td style='color:#e03050;font-size:11px'>"+comps.join(", ")+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
   const css="body{font-family:'DM Sans',sans-serif;background:#fff;color:#1a2a3a;font-size:14px;line-height:1.6;margin:0}.page{max-width:960px;margin:0 auto;padding:46px 42px}.header{border-bottom:3px solid #2edf8f;padding-bottom:22px;margin-bottom:28px}h1{font-size:24px;font-weight:900;color:#07111f;margin-bottom:5px}.meta{color:#4a7090;font-size:13px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:28px}.kpi{background:#f8faff;border:1px solid #dde8f5;border-radius:11px;padding:16px 13px;border-top:3px solid}.kl{font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#4a7090;margin-bottom:6px}.kv{font-size:26px;font-weight:900;line-height:1;margin-bottom:3px}.ks{font-size:10px;color:#8899aa}.ke{font-size:10px;color:#3a5a70;line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px solid #e0eaf5;font-family:monospace}section{margin-bottom:32px}h2{font-size:15px;font-weight:800;color:#07111f;margin-bottom:12px;padding-bottom:7px;border-bottom:2px solid #eef2f8;display:flex;align-items:center;gap:8px}.num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#2edf8f18;border-radius:5px;color:#2edf8f;font-size:10px;font-weight:900}table{width:100%;border-collapse:collapse;font-size:12px}thead tr{background:#f2f7ff}th{padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:#4a7090;border-bottom:2px solid #dde8f5}td{padding:8px 10px;border-bottom:1px solid #f0f5fb;vertical-align:middle}tr:last-child td{border-bottom:none}.bench td{background:#f0fff8!important;font-weight:600}.explain{background:#f0f7ff;border:1px solid #c8dff5;border-left:4px solid #4da6ff;border-radius:6px;padding:9px 13px;margin-bottom:12px;font-size:11px;color:#2a4a6a;line-height:1.6}.warn{background:#fff8e6;border:1px solid #f5c842;border-radius:6px;padding:7px 11px;margin-bottom:12px;font-size:11px;color:#7a6000}.kw-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.comment-box{background:#f8faff;border:1px solid #dde8f5;border-left:4px solid #2edf8f;border-radius:8px;padding:18px 20px}.comment-box p{margin-bottom:9px;color:#2a3a4a;line-height:1.75}.comment-box p:last-child{margin-bottom:0}.footer{margin-top:44px;padding-top:18px;border-top:1px solid #e8f0f5;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#4a7090}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:1.5cm}}";
-  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><img src='https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg' alt='Sempai' style='height:28px;width:auto;display:block;'><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div><div class='explain'>&#128208; <strong>SK&#261;D AI SHARE OF VOICE?</strong> SOV = "+(totalM||0)+" wzmianek Twojej marki ÷ ("+(totalM||0)+" + "+(totalCompM||0)+" wzmianek konkurent&oacute;w) = <strong style='color:#2edf8f'>"+globalSOV+"%</strong>. Mention Rate (% zapytań z marką): "+fP(totalM,totalWB)+".</div><section><h2><span class='num'>01</span> AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmiankou marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>&#9733;</span> Komentarz analityczny</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
+  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><img src='https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg' alt='Sempai' style='height:28px;width:auto;display:block;'><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div><div class='explain'>&#128208; <strong>SK&#261;D AI SHARE OF VOICE?</strong> SOV = "+(totalM||0)+" wzmianek Twojej marki ÷ ("+(totalM||0)+" + "+(totalCompM||0)+" wzmianek konkurent&oacute;w) = <strong style='color:#2edf8f'>"+globalSOV+"%</strong>. Mention Rate (% zapytań z marką): "+fP(totalM,totalWB)+".</div><section><h2><span class='num'>01</span> AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmianką marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>&#9733;</span> Komentarz analityczny</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
 }
