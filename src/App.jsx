@@ -8,7 +8,13 @@ const S = {
   navy1:"#07111f", navy2:"#0c1a2e", navy3:"#112240", navy4:"#1a3358",
   green:"#2edf8f", greenD:"#20b571", coral:"#ff5c6a",
   gold:"#f5c842", sky:"#4da6ff", purple:"#a78bfa",
-  text:"#e8f0ff", muted:"#4a7090", border:"#1a3354",
+  text:"#e8f0ff",
+  muted:"#7aabbf",   // brighter — readable on dark bg
+  dim:"#3a6070",     // for truly secondary info
+  border:"#1a3354",
+  // Explain box: white text on slightly lighter dark bg
+  exBg:"#0a1825",
+  exBorder:"#1e3a52",
 };
 
 const PLATFORMS = [
@@ -85,10 +91,14 @@ function parseCSV(text) {
   return rows;
 }
 
-function detectPlatform(headers, filename) {
+function detectPlatform(headers, filename, rows) {
   const h = headers.map(x=>x.toLowerCase().replace(/[^a-z0-9 ]/g,"").trim());
+
+  // 1. Check header column names first (most reliable)
   if (h.some(x=>x==="ai overview")) return "ai_overview";
   if (h.some(x=>x==="ai mode")) return "ai_mode";
+
+  // 2. Check filename
   const fn = (filename||"").toLowerCase();
   if (fn.includes("ai_mode")||fn.includes("ai-mode")||fn.includes("aimode")) return "ai_mode";
   if (fn.includes("overview")) return "ai_overview";
@@ -96,7 +106,22 @@ function detectPlatform(headers, filename) {
   if (fn.includes("gemini")) return "gemini";
   if (fn.includes("perplexity")) return "perplexity";
   if (fn.includes("copilot")) return "copilot";
-  // Check model column for short values
+
+  // 3. Check Model column — Ahrefs stores exact platform name there (ChatGPT, Gemini, etc.)
+  //    Only look at short values (real platform names are 1-3 words, response text is long)
+  const mi = headers.findIndex(x=>x==="Model");
+  if (mi >= 0 && rows && rows.length > 0) {
+    const modelVals = rows.slice(0, 20)
+      .map(r => (r[mi]||"").trim())
+      .filter(v => v.length > 0 && v.length < 30); // platform names are short
+    const combined = modelVals.join(" ").toLowerCase();
+    if (combined.includes("chatgpt") || combined.includes("gpt")) return "chatgpt";
+    if (combined.includes("gemini")) return "gemini";
+    if (combined.includes("perplexity")) return "perplexity";
+    if (combined.includes("copilot")) return "copilot";
+    if (combined.includes("ai mode") || combined.includes("aimode")) return "ai_mode";
+  }
+
   return null;
 }
 
@@ -105,7 +130,7 @@ function parseFile(buffer, filename, brandVariants) {
   const rows = parseCSV(text);
   if (rows.length < 2) return { error:"Plik pusty" };
   const headers = rows[0].map(h=>h.replace(/^"|"$/g,"").trim());
-  const platformId = detectPlatform(headers, filename);
+  const platformId = detectPlatform(headers, filename, rows.slice(1));
   const mentionsIdx = headers.findIndex(h=>h==="Mentions");
   const kwIdx = headers.findIndex(h=>h==="Keyword");
   const volIdx = headers.findIndex(h=>h==="Volume");
@@ -147,11 +172,65 @@ function calcSOV(brandM, compSet) { const ct=Object.values(compSet||{}).reduce((
 
 const Tip=({active,payload,label})=>{ if(!active||!payload?.length)return null; return <div style={{background:S.navy3,border:"1px solid "+S.border,borderRadius:8,padding:"9px 13px"}}><div style={{fontSize:10,color:S.muted,marginBottom:4}}>{label}</div>{payload.map((p,i)=><div key={i} style={{fontSize:12,color:p.color,fontWeight:700}}>{p.name}: {p.value}</div>)}</div>; };
 function ParticleBg() { const ref=useRef(null); useEffect(()=>{ const canvas=ref.current; if(!canvas)return; const ctx=canvas.getContext("2d"); let raf; canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight; const W=canvas.width,H=canvas.height; const pts=Array.from({length:25},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,r:Math.random()*1.2+.3})); function draw(){ctx.clearRect(0,0,W,H);pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle="rgba(46,223,143,0.12)";ctx.fill();}); raf=requestAnimationFrame(draw);} draw(); return ()=>cancelAnimationFrame(raf); },[]);  return <canvas ref={ref} style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}/>; }
-const Card=({children,style})=><div style={{background:S.navy2,border:"1px solid "+S.border,borderRadius:12,padding:"16px 18px",...style}}>{children}</div>;
-const SL=({color,children})=><div style={{fontSize:9,color:color||S.muted,fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",marginBottom:8}}>{children}</div>;
-const Explain=({children})=><div style={{fontSize:11,color:S.muted,lineHeight:1.6,padding:"7px 10px",background:S.navy1,borderRadius:6,borderLeft:"3px solid "+S.border,marginBottom:10}}>💡 {children}</div>;
-const STitle=({children})=><div style={{marginBottom:18}}><h2 style={{margin:0,fontSize:17,fontWeight:800,color:S.text}}>{children}</h2><div style={{width:30,height:2,background:"linear-gradient(90deg,"+S.green+",transparent)",marginTop:5}}/></div>;
-const Inp=({label,value,set,ph,span2,help})=>{ const [f,setF]=useState(false); return <div style={span2?{gridColumn:"1/-1"}:{}}><label style={{display:"block",fontSize:9,color:S.muted,marginBottom:4,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase"}}>{label}</label><input value={value} onChange={e=>set(e.target.value)} placeholder={ph} onFocus={()=>setF(true)} onBlur={()=>setF(false)} style={{width:"100%",boxSizing:"border-box",background:S.navy2,border:"1px solid "+(f?S.green+"66":S.border),borderRadius:8,padding:"9px 12px",color:S.text,fontSize:13,outline:"none"}}/>{help&&<div style={{fontSize:10,color:S.muted,marginTop:3}}>{help}</div>}</div>; };
+const Card = ({ children, style }) => (
+  <div style={{ background: S.navy2, border: "1px solid " + S.border, borderRadius: 12, padding: "18px 20px", ...style }}>
+    {children}
+  </div>
+);
+
+// Section label — white/bright on dark
+const SL = ({ color, children }) => (
+  <div style={{ fontSize: 10, color: color || "#c0d8e8", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 10 }}>
+    {children}
+  </div>
+);
+
+// Explanation box — ALWAYS high contrast: bright text on dark tinted bg
+const Explain = ({ children, type = "info" }) => {
+  const styles = {
+    info:    { bg: "#0a1e30", border: "#1e4060", icon: "💡", color: "#90c8e0" },
+    warn:    { bg: "#1a1200", border: "#4a3500", icon: "⚠️", color: "#f5c842" },
+    success: { bg: "#001a0e", border: "#004020", icon: "✅", color: "#2edf8f" },
+    step:    { bg: "#10081e", border: "#2a1060", icon: "👉", color: "#c0a0ff" },
+  };
+  const s = styles[type] || styles.info;
+  return (
+    <div style={{ fontSize: 12, color: s.color, lineHeight: 1.7, padding: "10px 14px", background: s.bg, borderRadius: 8, borderLeft: "3px solid " + s.border, marginBottom: 12 }}>
+      <span style={{ marginRight: 8 }}>{s.icon}</span>{children}
+    </div>
+  );
+};
+
+const STitle = ({ children }) => (
+  <div style={{ marginBottom: 22 }}>
+    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: S.text }}>{children}</h2>
+    <div style={{ width: 32, height: 3, background: "linear-gradient(90deg," + S.green + ",transparent)", marginTop: 6 }} />
+  </div>
+);
+
+const Inp = ({ label, value, set, ph, span2, help }) => {
+  const [f, setF] = useState(false);
+  return (
+    <div style={span2 ? { gridColumn: "1/-1" } : {}}>
+      <label style={{ display: "block", fontSize: 10, color: "#90b8c8", marginBottom: 5, fontWeight: 700, letterSpacing: "0.8px", textTransform: "uppercase" }}>{label}</label>
+      <input value={value} onChange={e => set(e.target.value)} placeholder={ph}
+        onFocus={() => setF(true)} onBlur={() => setF(false)}
+        style={{ width: "100%", boxSizing: "border-box", background: S.navy1, border: "1px solid " + (f ? S.green + "88" : S.border), borderRadius: 8, padding: "10px 13px", color: S.text, fontSize: 13, outline: "none", transition: "border .15s" }} />
+      {help && <div style={{ fontSize: 11, color: "#7aabbf", marginTop: 4 }}>{help}</div>}
+    </div>
+  );
+};
+
+// InfoBox — numbered step or fact box
+const InfoBox = ({ n, color, title, children }) => (
+  <div style={{ display: "flex", gap: 14, padding: "16px 18px", background: S.navy2, border: "1px solid " + (color || S.border), borderRadius: 12, marginBottom: 10 }}>
+    {n && <div style={{ width: 32, height: 32, borderRadius: "50%", background: (color || S.green) + "22", border: "2px solid " + (color || S.green) + "66", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: color || S.green, flexShrink: 0 }}>{n}</div>}
+    <div style={{ flex: 1 }}>
+      {title && <div style={{ fontSize: 13, fontWeight: 800, color: S.text, marginBottom: 5 }}>{title}</div>}
+      <div style={{ fontSize: 12, color: "#9abfd0", lineHeight: 1.75 }}>{children}</div>
+    </div>
+  </div>
+);
 
 export default function App() {
   const [tab,setTab]=useState("guide");
@@ -283,26 +362,60 @@ export default function App() {
 
         {/* GUIDE */}
         {tab==="guide"&&<div>
-          <STitle>Jak pobrać dane z Ahrefs i co to oznacza</STitle>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:22}}>
-            {[
-              {icon:"💬",title:"Mentions",color:S.green,def:"Ile razy AI wymienia nazwę Twojej marki z nazwy w odpowiedzi. Bezpośrednia rozpoznawalność."},
-              {icon:"🔗",title:"Citations",color:S.sky,def:"Ile razy AI cytuje stronę jako źródło/link. Możesz być cytowany bez wymienienia nazwy — to 'anonimowy ekspert'."},
-              {icon:"📊",title:"AI Share of Voice",color:S.purple,def:"Wzmianki Twojej marki ÷ (Twoje + konkurentów wzmianki) × 100. Udział głosu w AI vs konkurencja."},
-            ].map((x,i)=><div key={i} style={{padding:"14px 15px",background:S.navy2,border:"1px solid "+x.color+"22",borderRadius:10}}><div style={{fontSize:20,marginBottom:6}}>{x.icon}</div><div style={{fontSize:12,fontWeight:800,color:x.color,marginBottom:4}}>{x.title}</div><div style={{fontSize:11,color:S.muted,lineHeight:1.6}}>{x.def}</div></div>)}
+          <STitle>Jak to działa — przeczytaj zanim zaczniesz</STitle>
+
+          {/* What is this tool */}
+          <div style={{background:"linear-gradient(135deg,#0a1e30,#0c1a2e)",border:"1px solid #1e4060",borderRadius:14,padding:"20px 22px",marginBottom:22}}>
+            <div style={{fontSize:13,fontWeight:800,color:S.text,marginBottom:12}}>🤖 Co to w ogóle jest i do czego służy?</div>
+            <div style={{fontSize:12,color:"#9abfd0",lineHeight:1.8,marginBottom:14}}>
+              To narzędzie sprawdza czy i jak często <strong style={{color:S.text}}>modele AI (ChatGPT, Google AI Overview, Gemini itd.) wymieniają Twoją markę</strong> gdy ktoś zadaje pytania związane z Twoją branżą.
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              {[
+                {icon:"💬",title:"Wzmianki (Mentions)",color:S.green,def:'AI napisał: "...polecamy Ostry Sklep..." — to jest wzmianka. Marka wymieniona z nazwy w odpowiedzi AI.'},
+                {icon:"🔗",title:"Cytowania (Citations)",color:S.sky,def:'AI dodał link do Twojej strony jako źródło. Możesz być cytowany bez wymienienia nazwy — to "anonimowy ekspert".'},
+                {icon:"📊",title:"AI Share of Voice (SOV)",color:S.purple,def:'Twoje wzmianki ÷ (Twoje + wzmianki WSZYSTKICH konkurentów) × 100. Twój "kawałek tortu" wśród marek w AI.'},
+              ].map((x,i)=>(
+                <div key={i} style={{padding:"12px 14px",background:"#040d18",border:"1px solid "+x.color+"33",borderRadius:10}}>
+                  <div style={{fontSize:18,marginBottom:7}}>{x.icon}</div>
+                  <div style={{fontSize:12,fontWeight:800,color:x.color,marginBottom:5}}>{x.title}</div>
+                  <div style={{fontSize:11,color:"#8ab0c0",lineHeight:1.65}}>{x.def}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {[
-              {n:1,color:S.sky,title:"Ahrefs → AI visibility → AI responses",body:"W lewym menu: AI visibility → AI responses. Upewnij się że wybrałeś właściwy projekt i kraj (Poland).",tip:"Tu widzisz zapytania, dla których AI generuje odpowiedź w kontekście Twojej branży."},
-              {n:2,color:S.green,title:"Wybierz JEDNĄ platformę AI z filtra",body:"Kliknij filtr na górze i wybierz jedną platformę (Copilot, ChatGPT, Gemini itd.). Każdą eksportuj osobno.",tip:"AI Overview i AI Mode to produkty Google. ChatGPT to OpenAI. Każda platforma ma inne algorytmy i inaczej wymienia marki."},
-              {n:3,color:S.coral,title:'Export przy liczbie wyników (np. "489 results") — DOLNY przycisk',body:"Kliknij Export przy liczbie wyników na dole — to eksportuje WSZYSTKIE zapytania. Nie klikaj Export w prawym górnym rogu tabeli — ten daje tylko aktualny widok.",tip:"Plik zapisuje się jako CSV w UTF-16 lub UTF-8 — narzędzie obsługuje oba automatycznie."},
-              {n:4,color:S.gold,title:"Powtórz dla każdej platformy i wgraj wszystko naraz",body:"Zbierz pliki dla wszystkich platform i wgraj je razem w kroku ② Import. Platforma wykrywana automatycznie.",tip:"Nie musisz mieć wszystkich 6 platform. Brakująca platforma = 0, reszta działa normalnie."},
-            ].map(s=><div key={s.n} style={{display:"flex",gap:14,padding:"14px 16px",background:S.navy2,border:"1px solid "+S.border,borderRadius:11}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:s.color+"22",border:"2px solid "+s.color+"66",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:s.color,flexShrink:0}}>{s.n}</div>
-              <div><div style={{fontSize:13,fontWeight:800,color:S.text,marginBottom:4}}>{s.title}</div><div style={{fontSize:12,color:S.muted,lineHeight:1.7,marginBottom:5}}>{s.body}</div><div style={{fontSize:11,color:"#1a3550",padding:"5px 9px",background:S.navy1,borderRadius:6}}>💡 {s.tip}</div></div>
-            </div>)}
-          </div>
-          <button onClick={()=>setTab("setup")} style={{marginTop:20,padding:"11px 26px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Zaczynamy → ① Klient</button>
+
+          {/* Step by step */}
+          <div style={{fontSize:13,fontWeight:800,color:S.text,marginBottom:14}}>Jak pobrać dane — 4 kroki</div>
+          <InfoBox n="1" color={S.sky} title="Wejdź w Ahrefs → AI visibility → AI responses">
+            W lewym menu Ahrefs kliknij <strong style={{color:S.text}}>AI visibility</strong>, potem <strong style={{color:S.text}}>AI responses</strong>. Upewnij się że wybrałeś swój projekt (swoją domenę) i kraj <strong style={{color:S.text}}>Poland</strong>.
+            <div style={{marginTop:8,padding:"6px 10px",background:"#040d18",borderRadius:6,fontSize:11,color:"#6090a8"}}>
+              Tutaj Ahrefs pokazuje listę zapytań, dla których AI generuje odpowiedź z informacjami z Twojej branży.
+            </div>
+          </InfoBox>
+          <InfoBox n="2" color={S.green} title="Wybierz JEDNĄ platformę AI z filtra (np. Copilot)">
+            Na górze strony kliknij filtr i wybierz <strong style={{color:S.text}}>jedną platformę</strong> (np. Copilot). Każdą platformę eksportujesz osobno do osobnego pliku.
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:9}}>
+              {PLATFORMS.map(p=><span key={p.id} style={{padding:"3px 11px",borderRadius:12,fontSize:11,fontWeight:700,background:p.color+"22",border:"1px solid "+p.color+"55",color:p.color}}>{p.icon} {p.name}</span>)}
+            </div>
+            <div style={{marginTop:9,fontSize:11,color:"#6090a8"}}>AI Overview i AI Mode to dwa różne produkty Google — eksportuj je oddzielnie jako dwa osobne pliki!</div>
+          </InfoBox>
+          <InfoBox n="3" color={S.coral} title='Kliknij Export przy LICZBIE WYNIKÓW na dole — nie przy tabeli'>
+            <strong style={{color:"#ff8898"}}>Ważne: są dwa przyciski Export.</strong> Chcesz ten przy liczbie wyników (np. <em style={{color:S.text}}>"489 results"</em>) — on eksportuje <strong style={{color:S.text}}>WSZYSTKIE zapytania</strong>. Ten w prawym górnym rogu tabeli eksportuje tylko to co widać — nie używaj go.
+            <div style={{marginTop:8,padding:"6px 10px",background:"#1a0005",borderRadius:6,fontSize:11,color:"#f08090"}}>
+              Plik pobierze się jako CSV. Może być w UTF-16 lub UTF-8 — narzędzie obsługuje oba automatycznie.
+            </div>
+          </InfoBox>
+          <InfoBox n="4" color={S.gold} title="Powtórz dla każdej platformy, wgraj wszystkie pliki naraz">
+            Zrób kroki 2-3 dla każdej platformy. Zbierzesz 2-6 plików CSV. W zakładce <strong style={{color:S.text}}>② Import CSV</strong> wgraj je wszystkie jednocześnie — narzędzie samo rozpozna która platforma to który plik.
+            <div style={{marginTop:8,padding:"6px 10px",background:"#140d00",borderRadius:6,fontSize:11,color:"#c09030"}}>
+              Nie musisz mieć wszystkich 6 platform. Brakująca platforma = wynik 0, ale reszta działa normalnie.
+            </div>
+          </InfoBox>
+
+          <button onClick={()=>setTab("setup")} style={{marginTop:4,padding:"12px 28px",background:S.green+"22",border:"2px solid "+S.green+"66",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            Rozumiem, zaczynam → ① Klient
+          </button>
         </div>}
 
         {/* SETUP */}
@@ -314,7 +427,7 @@ export default function App() {
           </div>
           <Card style={{marginBottom:12}}>
             <SL>Typ domeny i branża</SL>
-            <Explain>Wybierz typ i branżę — wpływa na sugestie słów kluczowych i kontekst raportu.</Explain>
+            <Explain type="step">Wybierz poniżej <strong>co to za strona</strong> i <strong>jaka branża</strong>. Dzięki temu narzędzie wie jakich słów kluczowych szukać i jak interpretować dane. Nie pomijaj tego kroku!</Explain>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginTop:10,marginBottom:12}}>
               {Object.entries(INDUSTRIES).map(([key,ind])=><button key={key} onClick={()=>setBrand(b=>({...b,industry:key,industryType:""}))} style={{padding:"9px 11px",borderRadius:9,border:"1px solid "+(brand.industry===key?S.green:S.border),background:brand.industry===key?S.green+"18":"transparent",color:brand.industry===key?S.green:S.muted,cursor:"pointer",textAlign:"left"}}><div style={{fontSize:17,marginBottom:3}}>{ind.icon}</div><div style={{fontSize:11,fontWeight:700}}>{ind.label}</div></button>)}
             </div>
@@ -327,7 +440,7 @@ export default function App() {
           </Card>
           {(brand.name||brand.url)&&<Card style={{marginBottom:12}}>
             <SL>Warianty nazwy marki — system szuka każdego z nich w kolumnie Mentions</SL>
-            <Explain>Auto-generowane z domeny. Usuń bez sensu (✕), dodaj własne (Enter). Spacje dozwolone.</Explain>
+            <Explain type="step"><strong>Narzędzie szuka tych słów w kolumnie Mentions w plikach CSV.</strong> Jeśli AI napisze "ostry-sklep" — wykryje wzmiankę. Jeśli napisze "OstrySklep" bez myślnika — też wykryje. Usuń warianty które nie mają sensu (kliknij ✕), dodaj własne przez pole poniżej.</Explain>
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:10,marginBottom:10}}>
               {autoVariants.map((v,i)=><span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px 3px 11px",borderRadius:13,fontSize:11,fontWeight:700,background:S.green+"18",border:"1px solid "+S.green+"33",color:S.green}}>{v}<button onClick={()=>setRemovedVariants(prev=>new Set([...prev,v]))} style={{background:"none",border:"none",cursor:"pointer",color:S.green+"80",fontSize:12,lineHeight:1,padding:0}}>✕</button></span>)}
               {brandVariants.map((v,i)=><span key={"c"+i} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px 3px 11px",borderRadius:13,fontSize:11,fontWeight:700,background:S.sky+"18",border:"1px solid "+S.sky+"33",color:S.sky}}>{v}<button onClick={()=>setBrandVariants(prev=>prev.filter(x=>x!==v))} style={{background:"none",border:"none",cursor:"pointer",color:S.sky+"80",fontSize:12,lineHeight:1,padding:0}}>✕</button></span>)}
@@ -340,7 +453,7 @@ export default function App() {
           </Card>}
           {brand.industryType&&<Card style={{marginBottom:12}}>
             <SL color={S.gold}>Typowe tematy zapytań dla tej branży</SL>
-            <Explain>Czy marka pojawia się przy tych zapytaniach? Przydatne do interpretacji wyników.</Explain>
+            <Explain type="info">To są typowe zapytania dla tej branży — sprawdź czy Twoja marka pojawia się w danych przy tych tematach. To podpowiedź, nie filtr.</Explain>
             <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8}}>
               {industryHints.map((h,i)=><span key={i} style={{padding:"3px 11px",borderRadius:13,fontSize:11,fontWeight:600,background:S.gold+"12",border:"1px solid "+S.gold+"33",color:S.gold}}>{h}</span>)}
             </div>
@@ -371,7 +484,7 @@ export default function App() {
           {filesLoaded>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,marginBottom:12}}>
             {PLATFORMS.map(p=>{const d=proc[p.id];const loaded=!!files[p.id];return<div key={p.id} style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+(loaded?p.color+"44":S.border),borderRadius:10}}>
               <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}><span style={{background:p.color+"20",color:p.color,borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700}}>{p.icon} {p.name}</span>{loaded?<span style={{fontSize:10,color:S.green}}>✅</span>:<span style={{fontSize:10,color:S.muted}}>—</span>}</div>
-              {loaded?<><div style={{fontSize:9,color:S.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{files[p.id].filename}</div><div style={{fontSize:11,color:S.text,fontFamily:"monospace"}}>{fmtN(d.total)} zap. · <span style={{color:S.green}}>{fmtN(d.mentions)} wzm.</span> · <span style={{color:S.sky}}>{fmtN(d.citations)} cyt.</span></div><div style={{fontSize:10,color:S.muted,marginTop:2}}>Z marką w danych: {fmtN(d.withAnyBrand)} ({fmtP(d.withAnyBrand,d.total)})</div></>:<div style={{fontSize:11,color:"#1e3050"}}>Brak pliku — wgraj CSV z Ahrefs</div>}
+              {loaded?<><div style={{fontSize:9,color:S.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{files[p.id].filename}</div><div style={{fontSize:11,color:S.text,fontFamily:"monospace"}}>{fmtN(d.total)} zap. · <span style={{color:S.green}}>{fmtN(d.mentions)} wzm.</span> · <span style={{color:S.sky}}>{fmtN(d.citations)} cyt.</span></div><div style={{fontSize:10,color:"#6090a8",marginTop:2}}>W ilu zapytaniach jakakolwiek marka się pojawia: {fmtN(d.withAnyBrand)} ({fmtP(d.withAnyBrand,d.total)})</div></>:<div style={{fontSize:11,color:"#3a6080"}}>— wgraj CSV z Ahrefs dla tej platformy</div>}
             </div>;})}
           </div>}
           {unknownFiles.length>0&&<div style={{marginBottom:12,padding:"13px 15px",background:S.gold+"0a",border:"1px solid "+S.gold+"33",borderRadius:10}}>
@@ -387,16 +500,30 @@ export default function App() {
           <STitle>Dashboard Widoczności AI</STitle>
 
           {/* SOV explainer */}
-          <div style={{background:S.navy1,border:"1px solid "+S.border,borderRadius:10,padding:"13px 15px",marginBottom:18,fontSize:11,lineHeight:1.8}}>
-            <div style={{fontWeight:700,color:S.sky,marginBottom:8}}>📐 Jak liczymy AI Share of Voice — skąd te liczby?</div>
-            <div style={{color:S.muted}}>
-              <div><strong style={{color:S.text}}>Wzór:</strong> SOV = wzmianki marki ÷ (wzmianki marki + wzmianki wszystkich konkurentów) × 100</div>
-              <div style={{marginTop:8,padding:"9px 12px",background:S.navy2,borderRadius:7,fontFamily:"monospace",fontSize:11}}>
-                <div><span style={{color:S.green}}>Wzmianki Twojej marki:</span> <strong style={{color:S.green}}>{fmtN(totalM)}</strong></div>
-                <div><span style={{color:S.muted}}>+ Wzmianki konkurentów:</span> <strong style={{color:S.text}}>{fmtN(totalCompM)}</strong></div>
-                <div style={{borderTop:"1px solid "+S.border,marginTop:4,paddingTop:4}}><span style={{color:S.gold}}>SOV = {fmtN(totalM)} ÷ {fmtN(totalM+totalCompM)} = </span><strong style={{color:S.green,fontSize:13}}>{avgSOV}%</strong></div>
+          <div style={{background:"#030c18",border:"1px solid #1a3a55",borderRadius:12,padding:"16px 18px",marginBottom:20}}>
+            <div style={{fontWeight:800,color:"#70c0e0",marginBottom:12,fontSize:13}}>📐 Skąd bierze się AI Share of Voice — wyjaśnienie krok po kroku</div>
+            <div style={{fontSize:12,color:"#8abbd0",lineHeight:1.8,marginBottom:12}}>
+              <strong style={{color:S.text}}>Co to jest SOV?</strong> Wyobraź sobie że AI ma 100 wypowiedzi o nożach. W 10 wymienia Twoją markę, w 30 wymienia konkurentów. Twój "kawałek tortu" to 10 ÷ (10+30) = <strong style={{color:S.green}}>25%</strong>.
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div style={{background:"#040e1a",borderRadius:8,padding:"12px 14px",border:"1px solid #1a3a55"}}>
+                <div style={{fontSize:10,color:"#5090a8",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6}}>Wzór (co liczymy)</div>
+                <div style={{fontFamily:"monospace",fontSize:12,color:"#90c8e0",lineHeight:1.8}}>
+                  <div>Twoje wzmianki: <strong style={{color:S.green}}>{fmtN(totalM)}</strong></div>
+                  <div>Wzmianki konkurentów: <strong style={{color:"#90c8e0"}}>{fmtN(totalCompM)}</strong></div>
+                  <div style={{borderTop:"1px solid #1a3a55",marginTop:6,paddingTop:6,fontWeight:700}}>
+                    SOV = {fmtN(totalM)} ÷ {fmtN(totalM+totalCompM)} = <span style={{color:S.green,fontSize:14}}>{avgSOV}%</span>
+                  </div>
+                </div>
               </div>
-              <div style={{marginTop:7,color:"#1e3050",fontSize:10}}>Dlaczego Ahrefs może pokazywać inny %? Ahrefs liczy SOV tylko wśród zapytań gdzie marka LUB bezpośredni konkurent się pojawia — to zawęża mianownik i zawyża wynik. Nasz wzór jest bardziej zachowawczy i rzetelny.</div>
+              <div style={{background:"#100800",borderRadius:8,padding:"12px 14px",border:"1px solid #3a2200"}}>
+                <div style={{fontSize:10,color:"#806020",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:6}}>Dlaczego Ahrefs pokazuje inny %?</div>
+                <div style={{fontSize:12,color:"#c09050",lineHeight:1.7}}>
+                  Ahrefs liczy: wzm. ÷ <em>zapytania z jakąkolwiek marką</em>.<br/>
+                  My liczymy: wzm. ÷ <em>wzm. Twoje + wzm. konkurentów</em>.<br/>
+                  <strong style={{color:"#e0a040"}}>Nasz wzór jest bardziej precyzyjny.</strong> Ahrefs zawyża wynik bo zmniejsza mianownik.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -410,23 +537,23 @@ export default function App() {
             ].map((k,i)=><div key={i} style={{background:S.navy2,border:"1px solid "+k.color+"18",borderRadius:11,padding:"14px 13px"}}>
               <div style={{fontSize:9,color:S.muted,textTransform:"uppercase",letterSpacing:"1px",fontWeight:700,marginBottom:7}}>{k.label}</div>
               <div style={{fontSize:26,fontWeight:900,color:k.color,lineHeight:1,marginBottom:5}}>{k.value}</div>
-              <div style={{fontSize:9,color:"#1a3050",fontFamily:"monospace",lineHeight:1.4,marginBottom:6}}>{k.calc}</div>
-              <div style={{fontSize:10,color:S.muted,lineHeight:1.4,borderTop:"1px solid "+S.border,paddingTop:5}}>{k.desc}</div>
+              <div style={{fontSize:9,color:"#5090a8",fontFamily:"monospace",lineHeight:1.4,marginBottom:6}}>{k.calc}</div>
+              <div style={{fontSize:10,color:"#8ab8cc",lineHeight:1.4,borderTop:"1px solid #0e2030",paddingTop:6}}>{k.desc}</div>
             </div>)}
           </div>
 
           {/* Per-platform table */}
           <Card style={{marginBottom:14}}>
             <SL>Wyniki per platforma — skąd te liczby?</SL>
-            <Explain>Każdy wiersz = jeden plik CSV z Ahrefs. Zapytania = wiersze w pliku. Wzmianki = wiersze gdzie Mentions zawiera nazwę marki. "Z marką" = zapytania gdzie jakakolwiek marka się pojawia. SOV = wzmianki marki ÷ (wzm. marki + wzm. konkurentów).</Explain>
+            <Explain type="info"><strong>Skąd te liczby?</strong> Każdy wiersz = jedno zapytanie. "Zapytania" = ile wierszy było w pliku. "Wzmianki" = w ilu zapytaniach AI napisał nazwę Twojej marki. "Z marką" = zapytania gdzie jakakolwiek marka się pojawia (mianownik dla Mention Rate). SOV = wzmianki Twojej marki ÷ (Twoje + wszystkich konkurentów wzmianki).</Explain>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                 <thead><tr style={{borderBottom:"1px solid "+S.border}}>{["Platforma","Plik CSV","Zapytania","Z marką","Wzmianki","Cytowania","SOV %","Mention Rate"].map(h=><th key={h} style={{padding:"7px 9px",textAlign:"left",fontSize:9,color:S.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>{h}</th>)}</tr></thead>
                 <tbody>{PLATFORMS.map(p=>{const d=proc[p.id];const loaded=!!files[p.id];const sov=calcSOV(d.mentions,d.compSet);const mr=d.withAnyBrand>0?Math.round((d.mentions/d.withAnyBrand)*100):0;return<tr key={p.id} style={{borderBottom:"1px solid "+S.navy3,opacity:loaded?1:0.3}}>
                   <td style={{padding:"8px 9px"}}><span style={{background:p.color+"20",color:p.color,borderRadius:5,padding:"2px 6px",fontSize:10,fontWeight:700}}>{p.icon} {p.name}</span></td>
                   <td style={{padding:"8px 9px",color:S.muted,fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{files[p.id]?.filename?.split("/").pop().replace(/ostry-sklep.*?_/,"")?.slice(0,30)||"—"}</td>
-                  <td style={{padding:"8px 9px",fontFamily:"monospace",color:S.muted}}>{fmtN(d.total)}</td>
-                  <td style={{padding:"8px 9px",fontFamily:"monospace",color:S.muted}}>{fmtN(d.withAnyBrand)}</td>
+                  <td style={{padding:"8px 9px",fontFamily:"monospace",color:"#7aaabf"}}>{fmtN(d.total)}</td>
+                  <td style={{padding:"8px 9px",fontFamily:"monospace",color:"#7aaabf"}}>{fmtN(d.withAnyBrand)}</td>
                   <td style={{padding:"8px 9px",fontFamily:"monospace",color:S.green,fontWeight:700}}>{fmtN(d.mentions)}</td>
                   <td style={{padding:"8px 9px",fontFamily:"monospace",color:S.sky,fontWeight:700}}>{fmtN(d.citations)}</td>
                   <td style={{padding:"8px 9px"}}><div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:32,height:4,background:S.navy4,borderRadius:2,overflow:"hidden"}}><div style={{width:Math.max(sov,sov>0?5:0)+"%",height:"100%",background:p.color}}/></div><span style={{fontFamily:"monospace",fontSize:11,fontWeight:700,color:S.text}}>{sov}%</span></div></td>
@@ -471,7 +598,7 @@ export default function App() {
           {/* Competitors chart */}
           {allComps.length>0&&<Card style={{marginBottom:14}}>
             <SL>Konkurenci w danych AI — auto-wykryci z kolumny Mentions</SL>
-            <Explain>Marki znalezione w kolumnie Mentions. AI wymienia je w tych samych odpowiedziach co Twoją branżę.</Explain>
+            <Explain type="info"><strong>Skąd ci konkurenci?</strong> Narzędzie automatycznie wyciąga wszystkie nazwy z kolumny Mentions w Twoich plikach. To marki które AI wymienia w tych samych odpowiedziach co Twoja branża. Jeśli widzisz tu swoją markę zamiast konkurenta — sprawdź klucz marki w kroku ① Klient.</Explain>
             <ResponsiveContainer width="100%" height={Math.min(36*Math.min(allComps.length+1,9)+36,320)}>
               <BarChart data={[{name:brand.name||"Twoja marka",count:totalM},...allComps.slice(0,8).map(c=>({name:c,count:compCounts[c]}))]} layout="vertical" margin={{top:4,right:45,left:10,bottom:0}}>
                 <CartesianGrid strokeDasharray="2 4" stroke={S.border} horizontal={false}/>
@@ -488,7 +615,7 @@ export default function App() {
           {/* Opportunities */}
           <Card style={{marginBottom:14,border:"1px solid "+S.gold+"33"}}>
             <SL color={S.gold}>⚡ Opportunities — Quick Wins</SL>
-            <div style={{fontSize:10,color:S.muted,marginBottom:10,padding:"6px 9px",background:S.gold+"08",borderRadius:5,border:"1px solid "+S.gold+"22"}}>⚠️ <strong style={{color:S.gold}}>Sugestie do ręcznej weryfikacji</strong> — generowane automatycznie. Sprawdź kontekst branżowy przed wdrożeniem.</div>
+            <div style={{fontSize:11,color:"#c09840",marginBottom:10,padding:"8px 12px",background:"#120e00",borderRadius:6,border:"1px solid #4a3800"}}>⚠️ <strong style={{color:S.gold}}>Uwaga: to są SUGESTIE, nie gotowe zadania!</strong> Sprawdź każdą zanim wdrożysz — narzędzie nie zna kontekstu Twojej branży — generowane automatycznie. Sprawdź kontekst branżowy przed wdrożeniem.</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
               {(()=>{
                 const ops=[];
@@ -502,7 +629,7 @@ export default function App() {
                 ops.push({icon:"🔄",tag:"ZAWSZE",color:S.gold,title:"Content freshness",body:"Modele AI preferują świeże treści. Zaktualizuj kluczowe strony — data, FAQ z aktualnymi danymi."});
                 return ops.slice(0,6).map((op,i)=><div key={i} style={{padding:"11px 13px",background:op.color+"08",border:"1px solid "+op.color+"22",borderRadius:9}}>
                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>{op.icon}</span><span style={{fontSize:9,fontWeight:800,color:op.color,background:op.color+"20",borderRadius:4,padding:"1px 5px",letterSpacing:"0.7px",textTransform:"uppercase"}}>{op.tag}</span><span style={{fontSize:11,fontWeight:700,color:S.text}}>{op.title}</span></div>
-                  <div style={{fontSize:11,color:S.muted,lineHeight:1.6}}>{op.body}</div>
+                  <div style={{fontSize:11,color:"#90b8cc",lineHeight:1.65,marginTop:2}}>{op.body}</div>
                 </div>);
               })()}
             </div>
@@ -511,10 +638,10 @@ export default function App() {
           {/* Spostrzeżenia */}
           <Card style={{marginBottom:14}}>
             <SL>✦ Co to oznacza — wnioski</SL>
-            <div style={{fontSize:10,color:S.muted,marginBottom:8,padding:"5px 8px",background:S.muted+"0a",borderRadius:5}}>ℹ️ Wnioski auto-generowane z liczb. Kontekst branżowy weryfikuj ręcznie.</div>
+            <div style={{fontSize:11,color:"#8ab8cc",marginBottom:10,padding:"7px 11px",background:"#030c18",borderRadius:6,border:"1px solid #0e2a3a"}}>ℹ️ <strong>Wnioski tworzone automatycznie z liczb.</strong> Traktuj je jako punkt wyjścia — zawsze weryfikuj czy mają sens dla tej konkretnej branży.</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-              {best&&<div style={{padding:"10px 13px",background:S.green+"08",border:"1px solid "+S.green+"22",borderRadius:9}}><div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{color:S.green,fontWeight:900,flexShrink:0}}>↑</span><span style={{fontSize:11,color:S.muted,lineHeight:1.55}}><strong style={{color:S.green}}>Najlepsza: {best.platform}</strong> SOV {best.sov}% — {best.sov>=30?"silna pozycja, utrzymuj.":best.sov>=10?"umiarkowana, rozbuduj FAQ i how-to.":"niska, twórz dedykowany content."}</span></div></div>}
-              {worst&&worst!==best&&<div style={{padding:"10px 13px",background:S.coral+"08",border:"1px solid "+S.coral+"22",borderRadius:9}}><div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{color:S.coral,fontWeight:900,flexShrink:0}}>↓</span><span style={{fontSize:11,color:S.muted,lineHeight:1.55}}><strong style={{color:S.coral}}>Do działania: {worst.platform}</strong> SOV {worst.sov}% — {worst.sov===0?"marka całkowicie nieobecna. Zbadaj zapytania tej platformy.":"najniższy SOV. Twórz content w formacie tej platformy."}</span></div></div>}
+              {best&&<div style={{padding:"10px 13px",background:S.green+"08",border:"1px solid "+S.green+"22",borderRadius:9}}><div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{color:S.green,fontWeight:900,flexShrink:0}}>↑</span><span style={{fontSize:11,color:"#90b8cc",lineHeight:1.6}}><strong style={{color:S.green}}>Najlepsza: {best.platform}</strong> SOV {best.sov}% — {best.sov>=30?"silna pozycja, utrzymuj.":best.sov>=10?"umiarkowana, rozbuduj FAQ i how-to.":"niska, twórz dedykowany content."}</span></div></div>}
+              {worst&&worst!==best&&<div style={{padding:"10px 13px",background:S.coral+"08",border:"1px solid "+S.coral+"22",borderRadius:9}}><div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{color:S.coral,fontWeight:900,flexShrink:0}}>↓</span><span style={{fontSize:11,color:"#90b8cc",lineHeight:1.6}}><strong style={{color:S.coral}}>Do działania: {worst.platform}</strong> SOV {worst.sov}% — {worst.sov===0?"marka całkowicie nieobecna. Zbadaj zapytania tej platformy.":"najniższy SOV. Twórz content w formacie tej platformy."}</span></div></div>}
               {totalQ>0&&(()=>{
                 const ratio=totalM>0?totalC/totalM:null;
                 if(totalM===0&&totalC===0)return<div style={{padding:"10px 13px",background:S.muted+"08",border:"1px solid "+S.border,borderRadius:9}}><div style={{fontSize:11,color:S.muted}}>○ Brak obecności — marka niewidoczna dla AI. Start od entity building i structured data.</div></div>;
@@ -529,7 +656,7 @@ export default function App() {
 
           {/* Definitions */}
           <div style={{paddingTop:18,borderTop:"1px solid "+S.border}}>
-            <div style={{fontSize:10,color:S.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:11}}>Słownik wskaźników</div>
+            <div style={{fontSize:11,color:"#90c0d8",fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>📖 Słownik wskaźników — co znaczy każda liczba</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9}}>
               {[
                 {term:"AI Share of Voice",color:S.green,icon:"📊",def:"Twoje wzm. ÷ (Twoje + konkurentów) × 100. Udział głosu w AI."},
@@ -538,7 +665,7 @@ export default function App() {
                 {term:"Presence Score",color:S.sky,icon:"📡",def:"(Wzm. + Cyt.×0.5) ÷ wszystkie zapytania. Łączna obecność w AI."},
                 {term:"Quick Win",color:S.gold,icon:"⚡",def:"Szansa z dysproporcji wskaźników. ZAWSZE weryfikuj ręcznie przed wdrożeniem."},
                 {term:"Brand Variant",color:"#34d399",icon:"🔍",def:"Forma nazwy marki sprawdzana w Mentions. AI może pisać 'ostry-sklep', 'OstrySklep' lub 'Ostry Sklep'."},
-              ].map((x,i)=><div key={i} style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+x.color+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>{x.icon}</span><span style={{fontSize:11,fontWeight:800,color:x.color}}>{x.term}</span></div><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>{x.def}</div></div>)}
+              ].map((x,i)=><div key={i} style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+x.color+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>{x.icon}</span><span style={{fontSize:11,fontWeight:800,color:x.color}}>{x.term}</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>{x.def}</div></div>)}
             </div>
           </div>
           <button onClick={()=>setTab("report")} style={{marginTop:20,padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Generuj Raport →</button>
@@ -584,18 +711,18 @@ export default function App() {
             {(topBrandKws.length>0||topGapKws.length>0)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
               {topBrandKws.length>0&&<Card style={{border:"1px solid "+S.green+"33"}}>
                 <SL color={S.green}>🎯 Top zapytania z wzmianką marki</SL>
-                <Explain>Zapytania gdzie AI już wymienia markę — posortowane wg wolumenu.</Explain>
+                <Explain type="success"><strong>To dobra wiadomość!</strong> AI już zna Twoją markę przy tych zapytaniach. Sortowane od najbardziej popularnych — te warto utrzymywać i rozwijać.</Explain>
                 {topBrandKws.map(([kw,vol],i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 7px",background:i%2===0?S.navy1:"transparent",borderRadius:5,marginTop:2}}><span style={{fontSize:11,color:S.text,flex:1,marginRight:7,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw}</span>{vol>0&&<span style={{fontSize:10,color:S.muted,fontFamily:"monospace",flexShrink:0}}>{fmtN(vol)}</span>}</div>)}
               </Card>}
               {topGapKws.length>0&&<Card style={{border:"1px solid "+S.coral+"33"}}>
                 <SL color={S.coral}>⚠️ Luki — konkurenci obecni, marka nie</SL>
-                <Explain>Zapytania gdzie AI wymienia konkurentów ale nie Twoją markę — luki contentowe.</Explain>
+                <Explain type="warn"><strong>Tu jest miejsce do wzrostu!</strong> Przy tych popularnych zapytaniach AI wymienia konkurentów ale nie Ciebie. Twórz treści odpowiadające na te konkretne pytania.</Explain>
                 {topGapKws.map(([kw,{vol,comps}],i)=><div key={i} style={{padding:"5px 7px",background:i%2===0?S.navy1:"transparent",borderRadius:5,marginTop:2}}><div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:11,color:S.text,flex:1,marginRight:7,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw}</span>{vol>0&&<span style={{fontSize:10,color:S.muted,fontFamily:"monospace",flexShrink:0}}>{fmtN(vol)}</span>}</div><div style={{fontSize:10,color:S.coral}}>AI wymienia: {comps.join(", ")}</div></div>)}
               </Card>}
             </div>}
             <Card style={{marginBottom:14,border:"1px solid "+S.sky+"33"}}>
               <SL color={S.sky}>✅ Zatwierdź sekcje — raport generuje się po zatwierdzeniu wszystkich</SL>
-              <Explain>Sprawdź każdą sekcję. Zaznaczenie = potwierdzasz że dane są poprawne i komentarz zweryfikowany.</Explain>
+              <Explain type="warn"><strong>STOP — sprawdź zanim wyślesz klientowi!</strong> Rekomendacje są generowane automatycznie i mogą nie pasować do branży. Zaznacz każdą sekcję dopiero gdy ją przejrzałeś.</Explain>
               <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:8}}>
                 {sections.map(s=><label key={s.id} style={{display:"flex",alignItems:"center",gap:9,cursor:s.ok?"pointer":"not-allowed",opacity:s.ok?1:0.4}}>
                   <input type="checkbox" checked={reportChecks[s.id]===true} disabled={!s.ok} onChange={e=>setReportChecks(r=>({...r,[s.id]:e.target.checked}))} style={{width:15,height:15,accentColor:S.green}}/>
