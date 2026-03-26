@@ -484,6 +484,9 @@ export default function App() {
   const updateSub = (recId,subId,val) => setRecs(r=>r.map(x=>x.id===recId?{...x,subs:x.subs.map(s=>s.id===subId?{...s,text:val}:s)}:x));
   const removeSub = (recId,subId) => setRecs(r=>r.map(x=>x.id===recId?{...x,subs:x.subs.filter(s=>s.id!==subId)}:x));
   const [promptCopied,setPromptCopied]=useState(false);
+  const [kwTab,setKwTab]=useState("brand"); // "brand" | "gap"
+  const [kwSearch,setKwSearch]=useState("");
+  const [kwPage,setKwPage]=useState(0);
 
   const stopWords=new Set(["sklep","shop","store","online","pl","com","net","eu","www"]);
   function makeAutoVariants(input){
@@ -607,16 +610,20 @@ export default function App() {
   // Gap keywords: filter by industry relevance AND exclude keywords that contain
   // the brand name itself (not a real gap if the query is branded)
   const brandKeyLow = allVariants.map(v=>v.toLowerCase());
-  const topGapKws=Object.entries(kwGap)
+  // Also expand topBrandKws to full list for browser view
+  const allBrandKws=Object.entries(kwBrand).sort((a,b)=>b[1]-a[1]);
+  const allGapKws=Object.entries(kwGap)
     .filter(([kw])=>{
       const kwL = kw.toLowerCase();
-      // Skip if keyword contains brand name (branded query, not a real gap)
       if (brandKeyLow.some(v=>v&&kwL.includes(v))) return false;
-      // Skip if not topically relevant for this industry
       if (!isTopicRelevant(kwL, brand.industryType)) return false;
       return true;
     })
-    .sort((a,b)=>b[1].vol-a[1].vol).slice(0,12);
+    // Clean: remove brand from comps list in each gap entry
+    .map(([kw,d])=>([kw,{vol:d.vol,comps:d.comps.filter(c=>!brandKeyLow.some(v=>v&&c.includes(v)))}]))
+    .filter(([,d])=>d.comps.length>0)
+    .sort((a,b)=>b[1].vol-a[1].vol);
+  const topGapKws = allGapKws.slice(0,12);
   const industryHints=TOPIC_HINTS[brand.industryType]||TOPIC_HINTS.default;
   const filesLoaded=Object.keys(files).length;
 
@@ -631,13 +638,11 @@ export default function App() {
         <ParticleBg/>
         <div style={{position:"relative",maxWidth:1060,margin:"0 auto",padding:"20px 28px 0"}}>
           <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
-            <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,"+S.green+"20,"+S.navy4+")",border:"1.5px solid "+S.green+"55",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:18,color:S.green}}>S</div>
-            <div>
-              <div style={{display:"flex",alignItems:"baseline",gap:10}}>
-                <span style={{fontSize:19,fontWeight:800,color:S.text}}>sempai</span>
-                <span style={{fontSize:10,fontWeight:700,color:S.green,background:S.green+"18",border:"1px solid "+S.green+"44",borderRadius:5,padding:"1px 7px",letterSpacing:"1px",textTransform:"uppercase"}}>AI Visibility</span>
-              </div>
-              <div style={{fontSize:10,color:S.muted,letterSpacing:"2px",textTransform:"uppercase",marginTop:1}}>Report Generator · Let us perform!</div>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <img src="https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg"
+                alt="Sempai" style={{height:36,width:"auto",display:"block",filter:"brightness(0) invert(1)"}}
+                onError={e=>{e.target.style.display="none";}}/>
+              <span style={{fontSize:10,fontWeight:700,color:S.green,background:S.green+"18",border:"1px solid "+S.green+"44",borderRadius:5,padding:"2px 8px",letterSpacing:"1px",textTransform:"uppercase"}}>AI Visibility</span>
             </div>
             {filesLoaded>0&&<div style={{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>{PLATFORMS.filter(p=>proc[p.id].total>0).map(p=><span key={p.id} style={{fontSize:10,fontWeight:700,color:p.color,background:p.color+"18",border:"1px solid "+p.color+"44",borderRadius:6,padding:"2px 7px"}}>{p.icon} {p.name}</span>)}</div>}
           </div>
@@ -1028,6 +1033,68 @@ export default function App() {
             </ResponsiveContainer>
           </Card>}
 
+          {/* Keyword Browser */}
+          {(allBrandKws.length>0||allGapKws.length>0)&&<Card style={{marginBottom:14,border:"1px solid #1a3050"}}>
+            <SL color="#90c8e0">🔍 Przeglądarka zapytań — pełna lista</SL>
+            <div style={{fontSize:11,color:"#5090a8",marginBottom:12}}>Przeglądaj wszystkie zapytania z danych. Filtruj i szukaj po frazie.</div>
+            {/* Tabs */}
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button onClick={()=>{setKwTab("brand");setKwPage(0);setKwSearch("");}} style={{padding:"6px 16px",borderRadius:8,border:"1px solid "+(kwTab==="brand"?S.green+"66":S.border),background:kwTab==="brand"?S.green+"18":"transparent",color:kwTab==="brand"?S.green:"#5090a8",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                🎯 Marka się pojawia ({allBrandKws.length})
+              </button>
+              <button onClick={()=>{setKwTab("gap");setKwPage(0);setKwSearch("");}} style={{padding:"6px 16px",borderRadius:8,border:"1px solid "+(kwTab==="gap"?S.coral+"66":S.border),background:kwTab==="gap"?S.coral+"18":"transparent",color:kwTab==="gap"?S.coral:"#5090a8",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                ⚠️ Luki — marka nieobecna ({allGapKws.length})
+              </button>
+              <div style={{flex:1}}/>
+              <input value={kwSearch} onChange={e=>{setKwSearch(e.target.value);setKwPage(0);}} placeholder="Szukaj frazy..."
+                style={{background:S.navy1,border:"1px solid "+S.border,borderRadius:8,padding:"5px 11px",color:S.text,fontSize:12,outline:"none",width:180}}/>
+            </div>
+            {(()=>{
+              const PAGE=25;
+              const list = kwTab==="brand"
+                ? allBrandKws.filter(([kw])=>!kwSearch||kw.toLowerCase().includes(kwSearch.toLowerCase()))
+                : allGapKws.filter(([kw])=>!kwSearch||kw.toLowerCase().includes(kwSearch.toLowerCase()));
+              const page = list.slice(kwPage*PAGE, (kwPage+1)*PAGE);
+              const totalPages = Math.ceil(list.length/PAGE);
+              const isBrand = kwTab==="brand";
+              return <>
+                <div style={{background:"#020a14",borderRadius:8,overflow:"hidden",border:"1px solid #0e2030"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead>
+                      <tr style={{background:"#030e1a",borderBottom:"1px solid #0e2030"}}>
+                        <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>#</th>
+                        <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>Zapytanie</th>
+                        <th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>Wolumen/mies.</th>
+                        {!isBrand&&<th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>AI wymienia zamiast</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {page.length===0&&<tr><td colSpan={isBrand?3:4} style={{padding:"16px 12px",textAlign:"center",color:"#3a6070",fontSize:12}}>Brak wyników dla "{kwSearch}"</td></tr>}
+                      {page.map(([kw,valOrObj],i)=>{
+                        const vol = isBrand ? valOrObj : valOrObj.vol;
+                        const comps = isBrand ? null : valOrObj.comps;
+                        const rowN = kwPage*PAGE+i+1;
+                        return <tr key={i} style={{borderBottom:"1px solid #0a1a28",background:i%2===0?"transparent":"#030c18"}}>
+                          <td style={{padding:"7px 12px",color:"#3a5070",fontSize:11,width:36}}>{rowN}</td>
+                          <td style={{padding:"7px 12px",color:isBrand?"#c0e0d0":"#c0d0e0",fontWeight:i<3?700:400}}>{kw}</td>
+                          <td style={{padding:"7px 12px",textAlign:"right",fontFamily:"monospace",color:"#5090a8",fontSize:11}}>{vol>0?fmtN(vol):"—"}</td>
+                          {!isBrand&&<td style={{padding:"7px 12px",color:"#c06070",fontSize:11}}>{(comps||[]).slice(0,3).join(", ")}</td>}
+                        </tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPages>1&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:10}}>
+                  <button onClick={()=>setKwPage(p=>Math.max(0,p-1))} disabled={kwPage===0}
+                    style={{padding:"4px 12px",borderRadius:6,border:"1px solid "+S.border,background:"transparent",color:kwPage===0?"#2a4050":"#7aabbf",cursor:kwPage===0?"not-allowed":"pointer",fontSize:12}}>← Poprzednia</button>
+                  <span style={{fontSize:11,color:"#5090a8"}}>Strona {kwPage+1} z {totalPages} ({fmtN(list.length)} zapytań)</span>
+                  <button onClick={()=>setKwPage(p=>Math.min(totalPages-1,p+1))} disabled={kwPage>=totalPages-1}
+                    style={{padding:"4px 12px",borderRadius:6,border:"1px solid "+S.border,background:"transparent",color:kwPage>=totalPages-1?"#2a4050":"#7aabbf",cursor:kwPage>=totalPages-1?"not-allowed":"pointer",fontSize:12}}>Następna →</button>
+                </div>}
+              </>;
+            })()}
+          </Card>}
+
           {/* Opportunities */}
           <Card style={{marginBottom:14,border:"1px solid "+S.gold+"33"}}>
             <SL color={S.gold}>⚡ Opportunities — Quick Wins</SL>
@@ -1412,7 +1479,7 @@ export default function App() {
                 : <div style={{fontSize:12,color:"#5090a8",marginBottom:10}}>Pozostało do zatwierdzenia: {remaining} {remaining===1?"sekcja":"sekcji"} — przejdź przez listę powyżej.</div>
               }
               <div style={{display:"flex",gap:10}}>
-                <button onClick={()=>{const html=buildReportHTML({...buildArgs(),finalComment,recsHtml});window.open(URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"})),"_blank");}} disabled={!readyToGenerate}
+                <button onClick={()=>{const html=buildReportHTML({...buildArgs(),finalComment,recsHtml});const w=window.open("","_blank");if(w){w.document.write(html);w.document.close();}}} disabled={!readyToGenerate}
                   style={{padding:"10px 20px",background:readyToGenerate?S.green+"22":"transparent",border:"1px solid "+(readyToGenerate?S.green+"66":S.border),borderRadius:9,color:readyToGenerate?S.green:"#3a6080",fontSize:13,fontWeight:700,cursor:readyToGenerate?"pointer":"not-allowed"}}>🔍 Otwórz podgląd</button>
                 <button onClick={()=>{const html=buildReportHTML({...buildArgs(),finalComment,recsHtml});const a=document.createElement("a");a.href="data:text/html;charset=utf-8,"+encodeURIComponent(html);a.download="Sempai_AIVisibility_"+(brand.name||"Raport")+"_"+new Date().toISOString().slice(0,10)+".html";a.click();}} disabled={!readyToGenerate}
                   style={{padding:"10px 20px",background:readyToGenerate?S.sky+"22":"transparent",border:"1px solid "+(readyToGenerate?S.sky+"66":S.border),borderRadius:9,color:readyToGenerate?S.sky:"#3a6080",fontSize:13,fontWeight:700,cursor:readyToGenerate?"pointer":"not-allowed"}}>⬇ Pobierz HTML</button>
@@ -1470,7 +1537,7 @@ export default function App() {
   );
 }
 
-function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,allComps,compCounts,best,worst,topBrandKws,topGapKws,editableComment,totalCompM,finalComment}) {
+function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,globalSOV,allComps,compCounts,best,worst,topBrandKws,topGapKws,editableComment,totalCompM,top5CompM,finalComment,recsHtml}) {
   function fN(n){return(n||0).toLocaleString("pl-PL");}
   function fP(n,d){if(!d)return"0%";const v=(n/d)*100;if(v===0)return"0%";if(v<1)return v.toFixed(1)+"%";return Math.round(v)+"%";}
   function cSOV(m,cs){const ct=Object.values(cs||{}).reduce((s,v)=>s+v,0);return m+ct>0?Math.round((m/(m+ct))*100):0;}
@@ -1482,5 +1549,5 @@ function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,allComp
   const bHtml=topBrandKws.length>0?"<table><thead><tr><th>Zapytanie</th><th style='text-align:right'>Wolumen</th></tr></thead><tbody>"+topBrandKws.map(([kw,vol])=>"<tr><td>"+kw+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
   const gHtml=topGapKws.length>0?"<table><thead><tr><th>Zapytanie</th><th>AI wymienia</th><th style='text-align:right'>Vol.</th></tr></thead><tbody>"+topGapKws.map(([kw,{vol,comps}])=>"<tr><td>"+kw+"</td><td style='color:#e03050;font-size:11px'>"+comps.join(", ")+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
   const css="body{font-family:'DM Sans',sans-serif;background:#fff;color:#1a2a3a;font-size:14px;line-height:1.6;margin:0}.page{max-width:960px;margin:0 auto;padding:46px 42px}.header{border-bottom:3px solid #2edf8f;padding-bottom:22px;margin-bottom:28px}h1{font-size:24px;font-weight:900;color:#07111f;margin-bottom:5px}.meta{color:#4a7090;font-size:13px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:28px}.kpi{background:#f8faff;border:1px solid #dde8f5;border-radius:11px;padding:16px 13px;border-top:3px solid}.kl{font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#4a7090;margin-bottom:6px}.kv{font-size:26px;font-weight:900;line-height:1;margin-bottom:3px}.ks{font-size:10px;color:#8899aa}.ke{font-size:10px;color:#3a5a70;line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px solid #e0eaf5;font-family:monospace}section{margin-bottom:32px}h2{font-size:15px;font-weight:800;color:#07111f;margin-bottom:12px;padding-bottom:7px;border-bottom:2px solid #eef2f8;display:flex;align-items:center;gap:8px}.num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#2edf8f18;border-radius:5px;color:#2edf8f;font-size:10px;font-weight:900}table{width:100%;border-collapse:collapse;font-size:12px}thead tr{background:#f2f7ff}th{padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:#4a7090;border-bottom:2px solid #dde8f5}td{padding:8px 10px;border-bottom:1px solid #f0f5fb;vertical-align:middle}tr:last-child td{border-bottom:none}.bench td{background:#f0fff8!important;font-weight:600}.explain{background:#f0f7ff;border:1px solid #c8dff5;border-left:4px solid #4da6ff;border-radius:6px;padding:9px 13px;margin-bottom:12px;font-size:11px;color:#2a4a6a;line-height:1.6}.warn{background:#fff8e6;border:1px solid #f5c842;border-radius:6px;padding:7px 11px;margin-bottom:12px;font-size:11px;color:#7a6000}.kw-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.comment-box{background:#f8faff;border:1px solid #dde8f5;border-left:4px solid #2edf8f;border-radius:8px;padding:18px 20px}.comment-box p{margin-bottom:9px;color:#2a3a4a;line-height:1.75}.comment-box p:last-child{margin-bottom:0}.footer{margin-top:44px;padding-top:18px;border-top:1px solid #e8f0f5;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#4a7090}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:1.5cm}}";
-  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><div style='width:34px;height:34px;background:#0c1a2e;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#2edf8f;border:1.5px solid #2edf8f55'>S</div><span style='font-size:16px;font-weight:800;color:#07111f'>sempai</span><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div><div class='explain'>&#128208; <strong>SK&#261;D AI SHARE OF VOICE?</strong> SOV = "+(totalM||0)+" wzmianek Twojej marki ÷ ("+(totalM||0)+" + "+(totalCompM||0)+" wzmianek konkurent&oacute;w) = <strong style='color:#2edf8f'>"+globalSOV+"%</strong>. Mention Rate (% zapytań z marką): "+fP(totalM,totalWB)+".</div><section><h2><span class='num'>01</span> AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmiankou marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>&#9733;</span> Komentarz analityczny</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
+  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><img src='https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg' alt='Sempai' style='height:28px;width:auto;display:block;'><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div><div class='explain'>&#128208; <strong>SK&#261;D AI SHARE OF VOICE?</strong> SOV = "+(totalM||0)+" wzmianek Twojej marki ÷ ("+(totalM||0)+" + "+(totalCompM||0)+" wzmianek konkurent&oacute;w) = <strong style='color:#2edf8f'>"+globalSOV+"%</strong>. Mention Rate (% zapytań z marką): "+fP(totalM,totalWB)+".</div><section><h2><span class='num'>01</span> AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmiankou marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>&#9733;</span> Komentarz analityczny</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
 }
