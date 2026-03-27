@@ -393,7 +393,7 @@ function fmtN(n) { return (n||0).toLocaleString("pl-PL"); }
 function fmtP(num,den) { if(!den)return"0%"; const v=(num/den)*100; if(v===0)return"0%"; if(v<0.1)return"<0.1%"; if(v<1)return v.toFixed(1)+"%"; return Math.round(v)+"%"; }
 function calcSOV(brandM, compSet) { const ct=Object.values(compSet||{}).reduce((s,v)=>s+v,0); return brandM+ct>0?Math.round((brandM/(brandM+ct))*100):0; }
 
-const Tip=({active,payload,label})=>{ if(!active||!payload?.length)return null; return <div style={{background:S.navy3,border:"1px solid "+S.border,borderRadius:8,padding:"9px 13px"}}><div style={{fontSize:10,color:S.muted,marginBottom:4}}>{label}</div>{payload.map((p,i)=><div key={i} style={{fontSize:12,color:p.color,fontWeight:700}}>{p.name}: {p.value}</div>)}</div>; };
+const Tip=({active,payload,label})=>{ if(!active||!(payload&&payload.length))return null; return <div style={{background:S.navy3,border:"1px solid "+S.border,borderRadius:8,padding:"9px 13px"}}><div style={{fontSize:10,color:S.muted,marginBottom:4}}>{label}</div>{payload.map((p,i)=><div key={i} style={{fontSize:12,color:p.color,fontWeight:700}}>{p.name}: {p.value}</div>)}</div>; };
 function ParticleBg() { const ref=useRef(null); useEffect(()=>{ const canvas=ref.current; if(!canvas)return; const ctx=canvas.getContext("2d"); let raf; canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight; const W=canvas.width,H=canvas.height; const pts=Array.from({length:25},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.2,vy:(Math.random()-.5)*.2,r:Math.random()*1.2+.3})); function draw(){ctx.clearRect(0,0,W,H);pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle="rgba(46,223,143,0.12)";ctx.fill();}); raf=requestAnimationFrame(draw);} draw(); return ()=>cancelAnimationFrame(raf); },[]);  return <canvas ref={ref} style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}/>; }
 const Card = ({ children, style }) => (
   <div style={{ background: S.navy2, border: "1px solid " + S.border, borderRadius: 12, padding: "18px 20px", ...style }}>
@@ -635,7 +635,7 @@ export default function App() {
   const TABS=[{id:"guide",label:"⓪ Jak używać"},{id:"setup",label:"① Klient"},{id:"import",label:"② Import CSV"},{id:"dashboard",label:"③ Dashboard"},{id:"report",label:"④ Raport"},{id:"prompt",label:"⑤ Prompt AI"}];
 
   return (
-    <div style={{minHeight:"100vh",background:S.navy1,color:S.text,fontFamily:"'DM Sans','Segoe UI',sans-serif"}}>
+    <div style={{minHeight:"100vh",background:S.navy1,color:S.text,fontFamily:"DM Sans,Segoe UI,sans-serif"}}>
       <div style={{background:S.navy2,borderBottom:"1px solid "+S.border,position:"relative",overflow:"hidden",minHeight:108}}>
         <ParticleBg/>
         <div style={{position:"relative",maxWidth:1060,margin:"0 auto",padding:"20px 28px 0"}}>
@@ -680,61 +680,128 @@ export default function App() {
           </div>
 
           {/* Step by step */}
-          <div style={{fontSize:13,fontWeight:800,color:S.text,marginBottom:14}}>Jak pobrać dane — 4 kroki</div>
-          <InfoBox n="1" color={S.sky} title="Wejdź w Ahrefs → AI visibility → AI responses">
-            W lewym menu Ahrefs kliknij <strong style={{color:S.text}}>AI visibility</strong>, potem <strong style={{color:S.text}}>AI responses</strong>. Upewnij się że wybrałeś swój projekt (swoją domenę) i kraj <strong style={{color:S.text}}>Poland</strong>.
+          <div style={{fontSize:13,fontWeight:800,color:S.text,marginBottom:14}}>Jak pobrać dane — 5 kroków</div>
+
+          <InfoBox n="1" color={S.sky} title="Ahrefs → Brand Radar → wpisz markę i dodaj konkurentów">
+            Wejdź w <strong style={{color:S.text}}>Brand Radar</strong> w lewym menu Ahrefs. Wpisz nazwę marki klienta i dodaj konkurentów których chcesz śledzić. To jest punkt startowy całej analizy.
             <div style={{marginTop:8,padding:"6px 10px",background:"#040d18",borderRadius:6,fontSize:11,color:"#6090a8"}}>
-              Tutaj Ahrefs pokazuje listę zapytań, dla których AI generuje odpowiedź z informacjami z Twojej branży.
-            </div>
-          </InfoBox>
-          <InfoBox n="2" color={S.green} title="Wybierz JEDNĄ platformę AI z filtra (np. Copilot)">
-            Na górze strony kliknij filtr i wybierz <strong style={{color:S.text}}>jedną platformę</strong> (np. Copilot). Każdą platformę eksportujesz osobno jako osobny plik CSV.
-            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:9}}>
-              {PLATFORMS.map(p=><span key={p.id} style={{padding:"3px 11px",borderRadius:12,fontSize:11,fontWeight:700,background:p.color+"22",border:"1px solid "+p.color+"55",color:p.color}}>{p.icon} {p.name}</span>)}
-            </div>
-            <div style={{marginTop:9,fontSize:11,color:"#6090a8"}}>Uwaga: AI Overview i AI Mode wyglądają identycznie w Ahrefs — po wgraniu każdego pliku z nagłówkiem AI Overview zapytamy Cię który to jest.</div>
-          </InfoBox>
-          <InfoBox n="3" color={S.coral} title='Kliknij Export przy LICZBIE WYNIKÓW na dole — nie przy tabeli'>
-            <strong style={{color:"#ff8898"}}>Ważne: są dwa przyciski Export.</strong> Chcesz ten przy liczbie wyników (np. <em style={{color:S.text}}>"489 results"</em>) — on eksportuje <strong style={{color:S.text}}>WSZYSTKIE zapytania</strong>. Ten w prawym górnym rogu tabeli eksportuje tylko to co widać — nie używaj go.
-            <div style={{marginTop:8,padding:"6px 10px",background:"#1a0005",borderRadius:6,fontSize:11,color:"#f08090"}}>
-              Plik pobierze się jako CSV. Może być w UTF-16 lub UTF-8 — narzędzie obsługuje oba automatycznie.
-            </div>
-          </InfoBox>
-          <InfoBox n="4" color={S.gold} title="Powtórz dla każdej platformy, wgraj wszystkie pliki naraz">
-            Zrób kroki 2-3 dla każdej platformy. Zbierzesz 2-6 plików CSV. W zakładce <strong style={{color:S.text}}>② Import CSV</strong> wgraj je wszystkie jednocześnie — narzędzie samo rozpozna która platforma to który plik.
-            <div style={{marginTop:8,padding:"6px 10px",background:"#140d00",borderRadius:6,fontSize:11,color:"#c09030"}}>
-              Nie musisz mieć wszystkich 6 platform. Brakująca platforma = wynik 0, ale reszta działa normalnie.
+              Brand Radar śledzi widoczność marki i konkurencji w modelach AI na podstawie ich odpowiedzi na zapytania użytkowników.
             </div>
           </InfoBox>
 
-          {/* KLUCZOWE: Brand Radar vs AI Responses */}
+          <InfoBox n="2" color={S.green} title="Przejdź do AI Responses i wybierz agenta AI">
+            Wewnątrz Brand Radar kliknij zakładkę <strong style={{color:S.text}}>AI Responses</strong>. Następnie wybierz z filtra <strong style={{color:S.text}}>jednego agenta AI</strong> — np. ChatGPT, Gemini, Copilot, Perplexity.
+            <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:9,marginBottom:9}}>
+              {PLATFORMS.map(p=><span key={p.id} style={{padding:"3px 11px",borderRadius:12,fontSize:11,fontWeight:700,background:p.color+"22",border:"1px solid "+p.color+"55",color:p.color}}>{p.icon} {p.name}</span>)}
+            </div>
+            <div style={{padding:"6px 10px",background:"#001008",borderRadius:6,fontSize:11,color:"#3a8050"}}>
+              Każdego agenta eksportujesz osobno. Powtórz kroki 2-4 dla każdej platformy którą chcesz analizować.
+            </div>
+          </InfoBox>
+
+          <InfoBox n="3" color={S.purple} title="Wybierz lokalizację — np. Poland">
+            Ustaw filtr lokalizacji na <strong style={{color:S.text}}>Poland</strong> (lub inny kraj jeśli analizujesz rynek zagraniczny). Dane są segmentowane per kraj — wyniki dla PL i DE to osobne eksporty.
+            <div style={{marginTop:8,padding:"6px 10px",background:"#0a0018",borderRadius:6,fontSize:11,color:"#7060a0"}}>
+              Jeśli klient działa w kilku krajach — zrób osobny eksport dla każdego kraju i wgraj wszystkie pliki razem.
+            </div>
+          </InfoBox>
+
+          <InfoBox n="4" color={S.coral} title="Kliknij Export — pobierz plik CSV">
+            Kliknij przycisk <strong style={{color:"#ff8898"}}>Export</strong>. Plik CSV pobierze się automatycznie. Może być w formacie UTF-8 lub UTF-16 (z TAB zamiast przecinka) — narzędzie obsługuje oba automatycznie.
+            <div style={{marginTop:8,padding:"6px 10px",background:"#1a0005",borderRadius:6,fontSize:11,color:"#f08090"}}>
+              Uwaga: AI Overview i AI Mode mają w Ahrefs identyczny format pliku — po wgraniu zapytamy Cię który to jest.
+            </div>
+          </InfoBox>
+
+          <InfoBox n="5" color={S.gold} title="Wgraj wszystkie pliki naraz w zakładce ② Import CSV">
+            Zbierz pliki CSV (jeden per agent AI, ewentualnie per kraj). W zakładce <strong style={{color:S.text}}>② Import CSV</strong> wgraj je wszystkie jednocześnie — platforma wykrywana automatycznie z nazwy pliku i nagłówków.
+            <div style={{marginTop:8,padding:"6px 10px",background:"#140d00",borderRadius:6,fontSize:11,color:"#c09030"}}>
+              Nie musisz mieć wszystkich platform. Brakująca platforma = brak danych dla niej, reszta działa normalnie.
+            </div>
+          </InfoBox>
+
+          {/* KLUCZOWE: Co analizuje nasze narzędzie */}
           <div style={{marginTop:22,background:"#0a0018",border:"2px solid #3a1060",borderRadius:14,padding:"20px 22px",marginBottom:4}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
               <span style={{fontSize:22}}>⚡</span>
-              <div style={{fontSize:15,fontWeight:900,color:"#c0a0ff"}}>Ważne: nasze wyniki NIE będą identyczne z Ahrefs Brand Radar — i to jest OK</div>
+              <div style={{fontSize:15,fontWeight:900,color:"#c0a0ff"}}>Skąd pochodzi ten eksport i co liczymy?</div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
               <div style={{background:"#06001a",border:"1px solid #3a1060",borderRadius:10,padding:"14px 16px"}}>
-                <div style={{fontSize:11,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>📊 Ahrefs Brand Radar</div>
-                <div style={{fontSize:12,color:"#9080c0",lineHeight:1.8}}>
-                  <div>• Śledzi <strong style={{color:"#c0a0ff"}}>ręcznie wybrany, mały zestaw promptów</strong> (np. 74 zapytania)</div>
-                  <div>• Tylko najbardziej brandowe frazy z Twojej kategorii</div>
-                  <div>• SOV 11% = udział wśród tych 74 zapytań</div>
-                  <div style={{marginTop:8,padding:"6px 10px",background:"#030010",borderRadius:6,fontSize:11,color:"#5040a0"}}>Wynik wyższy bo mianownik jest mały (wąski zestaw)</div>
+                <div style={{fontSize:11,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>📊 Brand Radar w Ahrefs</div>
+                <div style={{fontSize:12,color:"#9080c0",lineHeight:1.9}}>
+                  <div>Zakładka w Ahrefs — dodajesz markę i konkurentów których chcesz śledzić</div>
+                  <div style={{marginTop:6}}>Wewnątrz Brand Radar jest sekcja <strong style={{color:"#c0a0ff"}}>AI Responses</strong> skąd pobierasz eksporty CSV</div>
+                  <div style={{marginTop:8,padding:"6px 10px",background:"#030010",borderRadius:6,fontSize:11,color:"#5040a0"}}>Brand Radar → AI Responses → agent AI → lokalizacja → Export</div>
                 </div>
               </div>
               <div style={{background:"#001a06",border:"1px solid #106030",borderRadius:10,padding:"14px 16px"}}>
-                <div style={{fontSize:11,fontWeight:800,color:"#2edf8f",textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>📁 Nasze narzędzie (AI Responses CSV)</div>
-                <div style={{fontSize:12,color:"#60b080",lineHeight:1.8}}>
-                  <div>• Analizuje <strong style={{color:"#2edf8f"}}>cały ruch branżowy</strong> — dziesiątki tysięcy zapytań</div>
-                  <div>• Wszystkie zapytania gdzie AI odpowiada w Twojej branży</div>
-                  <div>• SOV 6% = udział wśród np. 7 000+ zapytań</div>
-                  <div style={{marginTop:8,padding:"6px 10px",background:"#001008",borderRadius:6,fontSize:11,color:"#206040"}}>Wynik niższy bo mianownik jest ogromny (szeroki zbiór)</div>
+                <div style={{fontSize:11,fontWeight:800,color:"#2edf8f",textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>📁 AI Responses — to wgrywasz tutaj</div>
+                <div style={{fontSize:12,color:"#60b080",lineHeight:1.9}}>
+                  <div>Sekcja wewnątrz Brand Radar — <strong style={{color:"#2edf8f"}}>Brand Radar → AI Responses</strong></div>
+                  <div style={{marginTop:6}}>Wybierasz agenta AI (np. ChatGPT), lokalizację (np. Poland) i klikasz Export</div>
+                  <div style={{marginTop:8,padding:"6px 10px",background:"#001008",borderRadius:6,fontSize:11,color:"#206040"}}>Każdy agent i kraj = osobny plik CSV. Wgraj je wszystkie razem.</div>
                 </div>
               </div>
             </div>
             <div style={{padding:"12px 14px",background:"#080010",borderRadius:8,fontSize:12,color:"#8070b0",lineHeight:1.75}}>
-              <strong style={{color:"#c0a0ff"}}>Analogia:</strong> Brand Radar to jak pytanie 74 ekspertów branżowych o Twoją markę. Nasze narzędzie to jak pytanie 7 000 zwykłych użytkowników. Oba mają sens — Brand Radar pokazuje pozycję wśród najważniejszych pytań, nasze narzędzie pokazuje rzeczywisty zasięg w całym ruchu AI. Oba wyniki są poprawne, mierzą po prostu różne rzeczy.
+              <strong style={{color:"#c0a0ff"}}>Dlaczego Brand Radar może pokazywać inny % niż nasze narzędzie?</strong> W Brand Radar widzisz SOV tylko dla wybranych przez Ciebie frazy monitorujących. Nasze narzędzie liczy po WSZYSTKICH zapytaniach z eksportu — im więcej plików i platform wgrasz, tym pełniejszy obraz. <strong style={{color:"#c0a0ff"}}>Oba wyniki są poprawne</strong> — Brand Radar to Twój wybrany zestaw fraz, nasze narzędzie to pełen eksport AI Responses.
+            </div>
+          </div>
+
+          {/* SOV discrepancy explanation */}
+          <div style={{marginTop:16,background:"#030c18",border:"1px solid #1a3a55",borderRadius:12,padding:"18px 20px",marginBottom:4}}>
+            <div style={{fontSize:13,fontWeight:800,color:"#70c0e0",marginBottom:14}}>🔢 Dlaczego Twój SOV u nas różni się od Brand Radar — konkretne wyjaśnienie</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div style={{background:"#040e1a",border:"1px solid #1a3a55",borderRadius:9,padding:"13px 14px"}}>
+                <div style={{fontSize:10,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>Brand Radar — wąski mianownik</div>
+                <div style={{fontSize:12,color:"#8060b0",lineHeight:1.8}}>
+                  <div>SOV = Twoje wzm. ÷ (Twoje + <strong style={{color:"#c0a0ff"}}>tylko konkurenci których DODAŁEŚ</strong>)</div>
+                  <div style={{marginTop:6,color:"#5040a0",fontSize:11}}>Jeśli nie dodałeś Militaria.pl — Ahrefs jej nie liczy w mianowniku. Mianownik jest mały → SOV wyższy.</div>
+                </div>
+              </div>
+              <div style={{background:"#040e1a",border:"1px solid #1a3a55",borderRadius:9,padding:"13px 14px"}}>
+                <div style={{fontSize:10,fontWeight:800,color:S.green,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>Nasze narzędzie — szeroki mianownik</div>
+                <div style={{fontSize:12,color:"#407050",lineHeight:1.8}}>
+                  <div>SOV = Twoje wzm. ÷ (Twoje + <strong style={{color:S.green}}>WSZYSCY których AI wymienił</strong> w danych)</div>
+                  <div style={{marginTop:6,color:"#205030",fontSize:11}}>Automatycznie wyciągamy każdą markę z kolumny Mentions. Mianownik jest duży → SOV niższy, ale bardziej realistyczny.</div>
+                </div>
+              </div>
+            </div>
+            <div style={{background:"#0a0a14",borderRadius:8,padding:"12px 14px",fontSize:12,color:"#7090b0",lineHeight:1.8}}>
+              <strong style={{color:"#90c8e0"}}>Przykład z prawdziwych danych (AI Overview, Ostry Sklep):</strong>
+              <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{fontFamily:"monospace",fontSize:11,color:"#5090a8",lineHeight:2}}>
+                  <div><span style={{color:S.green}}>Wzmianki marki:</span> 205</div>
+                  <div><span style={{color:"#7060a0"}}>Militaria.pl (nie dodana):</span> 2 164</div>
+                  <div><span style={{color:"#7060a0"}}>Kolba (nie dodana):</span> 537</div>
+                  <div><span style={{color:"#7060a0"}}>Knivesandtools:</span> 96</div>
+                  <div style={{borderTop:"1px solid #1a3a55",marginTop:4,paddingTop:4}}><span style={{color:"#c0a0ff"}}>Nasze SOV = 205 ÷ 3055 =</span> <strong style={{color:S.green,fontSize:13}}>6.7%</strong></div>
+                </div>
+                <div style={{fontFamily:"monospace",fontSize:11,color:"#5090a8",lineHeight:2}}>
+                  <div><span style={{color:S.green}}>Wzmianki marki:</span> 205</div>
+                  <div><span style={{color:"#7060a0"}}>Dodany konkurent A:</span> ~400</div>
+                  <div><span style={{color:"#7060a0"}}>Dodany konkurent B:</span> ~300</div>
+                  <div style={{color:"#2a4050",fontSize:10}}>(Militaria.pl pominięta)</div>
+                  <div style={{borderTop:"1px solid #1a3a55",marginTop:4,paddingTop:4}}><span style={{color:"#c0a0ff"}}>Brand Radar SOV = 205 ÷ 905 =</span> <strong style={{color:"#c0a0ff",fontSize:13}}>~22%</strong></div>
+                </div>
+              </div>
+              <div style={{marginTop:10,padding:"8px 11px",background:"#060018",borderRadius:6,fontSize:11,color:"#7050c0"}}>
+                💡 <strong style={{color:"#a078e0"}}>Jak wyrównać wyniki:</strong> W Brand Radar dodaj wszystkich głównych konkurentów których AI wymienia. Im pełniejsza lista, tym wynik bardziej zbliżony do naszego narzędzia.
+                {allComps.length>0&&<div style={{marginTop:12,borderTop:"1px solid #2a1060",paddingTop:10}}>
+                  <div style={{fontSize:10,color:"#7050b0",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:8}}>Konkurenci wykryci w Twoich danych — dodaj ich w Brand Radar:</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {allComps.slice(0,20).map((c,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 8px",background:"#060018",borderRadius:5}}>
+                        <span style={{fontSize:10,color:"#3a2060",minWidth:20,textAlign:"right"}}>{i+1}.</span>
+                        <span style={{fontSize:12,color:"#c0a0ff",flex:1,fontFamily:"monospace"}}>{c}</span>
+                        <span style={{fontSize:11,color:"#6040a0",fontFamily:"monospace",background:"#0a0020",padding:"1px 8px",borderRadius:4}}>{(compCounts[c]||0).toLocaleString("pl-PL")} wzm.</span>
+                      </div>
+                    ))}
+                    {allComps.length>20&&<div style={{fontSize:10,color:"#4a2070",padding:"4px 8px"}}>... i {allComps.length-20} więcej</div>}
+                  </div>
+                </div>}
+              </div>
             </div>
           </div>
 
@@ -881,56 +948,72 @@ export default function App() {
 
           {/* SOV explainer — Ahrefs methodology */}
           <div style={{background:"#030c18",border:"1px solid #1a3a55",borderRadius:12,padding:"16px 18px",marginBottom:18}}>
-            <div style={{fontWeight:900,color:"#70c0e0",marginBottom:4,fontSize:16}}>📐 Jak liczymy wyniki — dlaczego mogą się różnić od Ahrefs Brand Radar</div>
-            <div style={{fontSize:12,color:"#4a7090",marginBottom:14}}>Przeczytaj żeby rozumieć skąd biorą się liczby</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
-              <div style={{background:"#040e1a",borderRadius:8,padding:"11px 13px",border:"1px solid #1a3a55"}}>
-                <div style={{fontSize:11,color:"#70b8d8",fontWeight:800,marginBottom:8}}>AI Share of Voice — wzór krok po kroku</div>
-                <div style={{fontFamily:"monospace",fontSize:12,color:"#90c8e0",lineHeight:2}}>
-                  <div style={{color:"#3a6070",marginBottom:3}}>brand ÷ (brand + top 5 rywali) × 100</div>
-                  <div>Twoje: <strong style={{color:S.green}}>{fmtN(totalM)}</strong></div>
-                  <div>Top 5 rywale: <strong style={{color:"#7aabbf"}}>{fmtN(top5CompM)}</strong></div>
-                  <div style={{borderTop:"1px solid #1a3a55",marginTop:6,paddingTop:6,fontWeight:700,fontSize:14}}>
-                    = <span style={{color:S.green,fontSize:20}}>{globalSOV}%</span>
+            <div style={{fontWeight:900,color:"#70c0e0",marginBottom:4,fontSize:16}}>📐 Jak Ahrefs Brand Radar liczy metryki — i jak my to przybliżamy</div>
+            <div style={{fontSize:12,color:"#4a7090",marginBottom:14}}>Brand Radar waży wyniki popularnością promptów (search volume). Nasze narzędzie liczy z surowych danych CSV — dlatego liczby się różnią.</div>
+
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+              {[
+                {n:"1",name:"AI Share of Voice",color:S.green,
+                 ahrefs:"Σ(waga_promptu × sygnał_marki) ÷ Σ_wszystkie_marki(waga × sygnał) × 100% — ważona popularnością zapytań",
+                 ours:fmtN(totalM)+" wzm. ÷ ("+fmtN(totalM)+" + "+fmtN(top5CompM)+" top 5) × 100 = "+globalSOV+"%",
+                 note:"Ahrefs waży wzmianki wolumenem promptu. My liczymy surowe wzmianki — stąd rozbieżność z Brand Radar."},
+                {n:"2",name:"Mentions",color:S.purple,
+                 ahrefs:"Σ odpowiedzi AI z dopasowaniem nazwy marki (string match, ważony popularnością)",
+                 ours:fmtN(totalM)+" odpowiedzi gdzie kolumna Mentions zawiera nazwę marki",
+                 note:"Metodologia zbliżona. Ahrefs może stosować deduplikację i normalizację — wyniki mogą się nieco różnić."},
+                {n:"3",name:"Citations",color:S.sky,
+                 ahrefs:"Σ odpowiedzi AI zawierających link do domeny jako źródło (ważony popularnością)",
+                 ours:fmtN(totalC)+" odpowiedzi gdzie kolumna Link URL zawiera domenę marki",
+                 note:"Metodologia zbliżona. Mierzymy obecność domeny w kolumnie Link URL z CSV."},
+                {n:"4",name:"Estimated Impressions",color:S.coral,
+                 ahrefs:"Σ(search_volume_promptu × sygnał_widoczności) — modelowana ekspozycja, NIE realny ruch",
+                 ours:"Σ wolumenów zapytań z wzmianką marki = "+(totalImpressions>999999?Math.round(totalImpressions/1000)+"k":fmtN(totalImpressions)),
+                 note:"Podobne podejście do Ahrefs. Interpretuj jako potencjał ekspozycji, nie realne wyświetlenia."},
+                {n:"5",name:"Visibility Gap",color:S.gold,
+                 ahrefs:"Brak oficjalnej metryki Ahrefs o tej nazwie — nasze rozszerzenie",
+                 ours:fmtN(totalGapQueries)+" zapytań gdzie AI wymienia konkurenta ale pomija markę",
+                 note:"Nasza własna metryka. Wskazuje tematy contentowe do pokrycia."},
+              ].map((m,i)=>(
+                <div key={i} style={{background:"#040e1a",borderRadius:8,padding:"10px 13px",border:"1px solid #0e2a3a"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                    <span style={{fontSize:11,fontWeight:900,color:m.color,background:m.color+"18",borderRadius:4,padding:"1px 8px"}}>{m.n}</span>
+                    <span style={{fontSize:12,fontWeight:800,color:m.color}}>{m.name}</span>
                   </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:6}}>
+                    <div style={{background:"#020810",borderRadius:5,padding:"6px 9px"}}>
+                      <div style={{fontSize:8,color:"#3a6080",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3}}>Ahrefs Brand Radar</div>
+                      <div style={{fontSize:10,color:"#5090a8",lineHeight:1.6}}>{m.ahrefs}</div>
+                    </div>
+                    <div style={{background:"#020810",borderRadius:5,padding:"6px 9px"}}>
+                      <div style={{fontSize:8,color:"#3a6080",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px",marginBottom:3}}>Nasze narzędzie</div>
+                      <div style={{fontSize:10,color:"#70b0c8",lineHeight:1.6}}>{m.ours}</div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:10,color:"#2a5060",padding:"4px 8px",background:"#010810",borderRadius:4,lineHeight:1.5}}>ℹ️ {m.note}</div>
                 </div>
-                <div style={{fontSize:10,color:"#3a6070",marginTop:6,lineHeight:1.5}}>Ahrefs porównuje Twoją markę do 3-5 kluczowych konkurentów w tej samej kategorii zapytań.</div>
-              </div>
-              <div style={{background:"#040e1a",borderRadius:8,padding:"11px 13px",border:"1px solid #1a3a55"}}>
-                <div style={{fontSize:11,color:"#70b8d8",fontWeight:800,marginBottom:8}}>AI Impressions — szacowany zasięg</div>
-                <div style={{fontSize:11,color:"#7ab0c8",lineHeight:1.7,marginBottom:6}}>
-                  Suma miesięcznych wolumenów wyszukiwań dla zapytań, w których AI wymienił markę.
-                </div>
-                <div style={{fontFamily:"monospace",fontSize:11,color:S.coral,fontWeight:700}}>{totalImpressions>999999?Math.round(totalImpressions/1000)+"k":fmtN(totalImpressions)}</div>
-                <div style={{fontSize:10,color:"#3a6070",marginTop:6,lineHeight:1.5}}>To nie są kliknięcia — to szacunek ile razy użytkownicy mogli zobaczyć wzmiankę Twojej marki.</div>
-              </div>
-              <div style={{background:"#0a0804",borderRadius:8,padding:"11px 13px",border:"1px solid #302008"}}>
-                <div style={{fontSize:11,color:"#d09040",fontWeight:800,marginBottom:8}}>Visibility Gap — luki contentowe</div>
-                <div style={{fontSize:11,color:"#b08040",lineHeight:1.7,marginBottom:6}}>
-                  Zapytania gdzie konkurent się pojawia, ale Twoja marka nie.
-                </div>
-                <div style={{fontFamily:"monospace",fontSize:11,color:S.gold,fontWeight:700}}>{fmtN(totalGapQueries)} zapytań do odrobienia</div>
-                <div style={{fontSize:10,color:"#3a2808",marginTop:6,lineHeight:1.5}}>To mapa luk contentowych — tematy które warto pokryć aby wyrównać pole z konkurencją.</div>
-              </div>
+              ))}
+            </div>
+
+            <div style={{padding:"9px 12px",background:"#0a0a14",borderRadius:7,fontSize:11,color:"#4a7090",lineHeight:1.7}}>
+              <strong style={{color:"#7aaabf"}}>Ważne:</strong> Metryki Brand Radar to <em>directional indicators</em> — Ahrefs zastrzega, że nie są to dokładne liczniki ruchu ani audience measurement. Baza danych Brand Radar: 300+ mln search-backed promptów z People Also Ask i bazy słów kluczowych Ahrefs. Dane odświeżane miesięcznie z oknem 90-dniowym.
             </div>
 
             {/* Brand Radar vs AI Responses */}
             <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div style={{background:"#08001a",border:"1px solid #2a1050",borderRadius:8,padding:"11px 14px"}}>
-                <div style={{fontSize:10,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:7}}>⚠️ Ahrefs Brand Radar pokazuje wyższy %?</div>
+                <div style={{fontSize:10,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:7}}>Brand Radar — osobna zakładka Ahrefs</div>
                 <div style={{fontSize:12,color:"#8060b0",lineHeight:1.75}}>
-                  Brand Radar śledzi <strong style={{color:"#c0a0ff"}}>ok. 70-100 wybranych zapytań</strong> z Twojej kategorii. Mały mianownik = wyższy %. To normalne. Nasze narzędzie liczy po tysiącach zapytań z pełnego eksportu AI Responses.
+                  Brand Radar śledzi <strong style={{color:"#c0a0ff"}}>~74 ręcznie wybranych zapytań</strong>. Małe liczby = wyższy %. <strong style={{color:"#c0a0ff"}}>To nie jest źródło plików CSV</strong> które tu wgrywasz.
                 </div>
-                <div style={{marginTop:7,fontSize:11,color:"#4a2080",padding:"5px 8px",background:"#040010",borderRadius:5}}>Oba wyniki są poprawne — mierzą inny zakres danych.</div>
+                <div style={{marginTop:7,fontSize:11,color:"#4a2080",padding:"5px 8px",background:"#040010",borderRadius:5}}>Brand Radar → AI Responses → agent AI → lokalizacja → Export = Twój plik CSV.</div>
               </div>
               <div style={{background:"#001208",border:"1px solid #104030",borderRadius:8,padding:"11px 14px"}}>
-                <div style={{fontSize:10,fontWeight:800,color:S.green,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:7}}>✓ Nasze narzędzie — pełny eksport AI Responses</div>
+                <div style={{fontSize:10,fontWeight:800,color:S.green,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:7}}>AI Responses — to co wgrywasz</div>
                 <div style={{fontSize:12,color:"#408060",lineHeight:1.75}}>
-                  Analizuje <strong style={{color:S.green}}>wszystkie zapytania z eksportu CSV</strong> — szerszy obraz rzeczywistej widoczności w AI. Konserwatywny wynik, ale prawdziwy.
+                  Ahrefs → AI Visibility → <strong style={{color:S.green}}>AI Responses</strong> → Export. Dziesiątki tysięcy zapytań — szerszy mianownik = niższy % niż Brand Radar. <strong style={{color:S.green}}>Oba wyniki są poprawne</strong>.
                 </div>
-                <div style={{marginTop:7,fontSize:11,color:"#1a4020",padding:"5px 8px",background:"#000a04",borderRadius:5}}>Im więcej plików CSV wgrasz, tym dokładniejszy wynik.</div>
+                <div style={{marginTop:7,fontSize:11,color:"#1a4020",padding:"5px 8px",background:"#000a04",borderRadius:5}}>Im więcej platform wgrasz, tym pełniejszy obraz.</div>
               </div>
-            </div>
           </div>
 
           {/* 5 metryk Ahrefs AI Visibility */}
@@ -994,7 +1077,7 @@ export default function App() {
                 <thead><tr style={{borderBottom:"1px solid "+S.border}}>{["Platforma","Plik CSV","Zapytania","Zapytania z jakąkolwiek marką","Wzmianki","Cytowania","SOV %","Mention Rate"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",fontSize:10,color:"#7aaabf",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>{h}</th>)}</tr></thead>
                 <tbody>{PLATFORMS.map(p=>{const d=proc[p.id];const loaded=!!files[p.id];const sov=calcSOV(d.mentions,d.compSet);const mr=d.withAnyBrand>0?Math.round((d.mentions/d.withAnyBrand)*100):0;return<tr key={p.id} style={{borderBottom:"1px solid "+S.navy3,opacity:loaded?1:0.3}}>
                   <td style={{padding:"8px 9px"}}><span style={{background:p.color+"20",color:p.color,borderRadius:5,padding:"2px 6px",fontSize:10,fontWeight:700}}>{p.icon} {p.name}</span></td>
-                  <td style={{padding:"8px 9px",color:S.muted,fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{files[p.id]?.filename?.split("/").pop().replace(/ostry-sklep.*?_/,"")?.slice(0,30)||"—"}</td>
+                  <td style={{padding:"8px 9px",color:S.muted,fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(files[p.id]&&files[p.id].filename?(files[p.id].filename.split("/").pop().replace(/ostry-sklep.*?_/,"").slice(0,30)):"—")}</td>
                   <td style={{padding:"9px 10px",fontFamily:"monospace",color:"#8ab8cc",fontSize:12}}>{fmtN(d.total)}</td>
                   <td style={{padding:"9px 10px",fontFamily:"monospace",color:"#8ab8cc",fontSize:12}}>{fmtN(d.withAnyBrand)}</td>
                   <td style={{padding:"9px 10px",fontFamily:"monospace",color:S.green,fontWeight:800,fontSize:13}}>{fmtN(d.mentions)}</td>
@@ -1369,10 +1452,10 @@ export default function App() {
           ].join("\n\n");
 
           const readyToGenerate = sectionDefs
-            .filter(s => s.ok !== false)
-            .every(s => s.key==="recs" ? recs.length>0 : reportChecks[s.id]===true);
+            .filter(s => s.ok !== false && s.key !== "recs")
+            .every(s => reportChecks[s.id]===true);
 
-          const remaining = sectionDefs.filter(s=>s.ok!==false&&(s.key==="recs"?recs.length===0:!reportChecks[s.id])).length;
+          const remaining = sectionDefs.filter(s=>s.ok!==false&&s.key!=="recs"&&!reportChecks[s.id]).length;
 
           return <div>
             <STitle>Raport — zbuduj sekcje i wygeneruj dokument</STitle>
@@ -1619,6 +1702,6 @@ function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,globalS
   const compHtml=allComps.length>0?"<section><h2><span class='num'>02</span> Konkurenci z danych AI</h2><div class='explain'><strong>Skąd dane?</strong> Kolumna Mentions w plikach CSV — marki wymieniane przez AI w tych samych odpowiedziach co Twoja branża.</div><table><thead><tr><th>Marka</th><th>Wzmianki AI</th><th>vs. "+(brand.name||"Twoja marka")+"</th></tr></thead><tbody><tr class='bench'><td><span style='background:#2edf8f18;color:#1db872;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700'>&#10022; "+(brand.name||"Twoja marka")+"</span></td><td><strong style='color:#1db872'>"+fN(totalM)+"</strong></td><td><span style='background:#2edf8f18;color:#1db872;padding:2px 6px;border-radius:4px;font-size:10px'>Benchmark</span></td></tr>"+allComps.slice(0,8).map(c=>{const diff=totalM-compCounts[c];return"<tr><td>"+c+"</td><td>"+fN(compCounts[c])+"</td><td style='color:"+(diff>=0?"#1db872":"#e03050")+"'>"+(diff>=0?"+":"")+diff+"</td></tr>";}).join("")+"</tbody></table></section>":"";
   const bHtml=topBrandKws.length>0?"<table><thead><tr><th>Zapytanie</th><th style='text-align:right'>Wolumen</th></tr></thead><tbody>"+topBrandKws.map(([kw,vol])=>"<tr><td>"+kw+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
   const gapList=topGapKws&&topGapKws.length>0?topGapKws:(allGapKws||topGapKws);const gHtml=gapList&&gapList.length>0?"<table><thead><tr><th>Zapytanie</th><th>AI wymienia</th><th style='text-align:right'>Vol.</th></tr></thead><tbody>"+gapList.map(([kw,{vol,comps}])=>"<tr><td>"+kw+"</td><td style='color:#e03050;font-size:11px'>"+comps.join(", ")+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
-  const css="body{font-family:'DM Sans',sans-serif;background:#fff;color:#1a2a3a;font-size:14px;line-height:1.6;margin:0}.page{max-width:960px;margin:0 auto;padding:46px 42px}.header{border-bottom:3px solid #2edf8f;padding-bottom:22px;margin-bottom:28px}h1{font-size:24px;font-weight:900;color:#07111f;margin-bottom:5px}.meta{color:#4a7090;font-size:13px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:28px}.kpi{background:#f8faff;border:1px solid #dde8f5;border-radius:11px;padding:16px 13px;border-top:3px solid}.kl{font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#4a7090;margin-bottom:6px}.kv{font-size:26px;font-weight:900;line-height:1;margin-bottom:3px}.ks{font-size:10px;color:#8899aa}.ke{font-size:10px;color:#3a5a70;line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px solid #e0eaf5;font-family:monospace}section{margin-bottom:32px}h2{font-size:17px;font-weight:900;color:#07111f;margin-bottom:14px;padding-bottom:9px;border-bottom:2px solid #eef2f8;display:flex;align-items:center;gap:10px}.num{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;background:#2edf8f22;border-radius:7px;color:#0a7a40;font-size:13px;font-weight:900;padding:0 6px}table{width:100%;border-collapse:collapse;font-size:12px}thead tr{background:#f2f7ff}th{padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:#4a7090;border-bottom:2px solid #dde8f5}td{padding:8px 10px;border-bottom:1px solid #f0f5fb;vertical-align:middle}tr:last-child td{border-bottom:none}.bench td{background:#f0fff8!important;font-weight:600}.explain{background:#f0f7ff;border:1px solid #c8dff5;border-left:4px solid #4da6ff;border-radius:6px;padding:9px 13px;margin-bottom:12px;font-size:11px;color:#2a4a6a;line-height:1.6}.warn{background:#fff8e6;border:1px solid #f5c842;border-radius:6px;padding:7px 11px;margin-bottom:12px;font-size:11px;color:#7a6000}.kw-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.comment-box{background:#f8faff;border:1px solid #dde8f5;border-left:4px solid #2edf8f;border-radius:8px;padding:18px 20px}.comment-box p{margin-bottom:9px;color:#2a3a4a;line-height:1.75}.comment-box p:last-child{margin-bottom:0}.footer{margin-top:44px;padding-top:18px;border-top:1px solid #e8f0f5;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#4a7090}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:1.5cm}}";
-  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><img src='https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg' alt='Sempai' style='height:28px;width:auto;display:block;'><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div><div style='background:#f0f9f4;border:1px solid #b8e8d0;border-left:4px solid #2edf8f;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#1a4a30;line-height:1.7'><strong style='color:#0a7a40'>Jak obliczamy AI Share of Voice:</strong> "+fN(totalM)+" wzmianek Twojej marki ÷ ("+fN(totalM)+" + "+fN(top5CompM||0)+" wzmianek top 5 konkurentów) = <strong style='color:#0a7a40;font-size:14px'>"+sov+"%</strong>. Im wyższy wynik, tym częściej AI wymienia markę zamiast rywali.</div><section><h2><span class='num'>01</span> AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmianką marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>04</span> Komentarz analityczny i rekomendacje</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
+  const css="body{font-family:"DM Sans",sans-serif;background:#fff;color:#1a2a3a;font-size:14px;line-height:1.6;margin:0}.page{max-width:960px;margin:0 auto;padding:46px 42px}.header{border-bottom:3px solid #2edf8f;padding-bottom:22px;margin-bottom:28px}h1{font-size:24px;font-weight:900;color:#07111f;margin-bottom:5px}.meta{color:#4a7090;font-size:13px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:28px}.kpi{background:#f8faff;border:1px solid #dde8f5;border-radius:11px;padding:16px 13px;border-top:3px solid}.kl{font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#4a7090;margin-bottom:6px}.kv{font-size:26px;font-weight:900;line-height:1;margin-bottom:3px}.ks{font-size:10px;color:#8899aa}.ke{font-size:10px;color:#3a5a70;line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px solid #e0eaf5;font-family:monospace}section{margin-bottom:32px}h2{font-size:17px;font-weight:900;color:#07111f;margin-bottom:14px;padding-bottom:9px;border-bottom:2px solid #eef2f8;display:flex;align-items:center;gap:10px}.num{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;background:#2edf8f22;border-radius:7px;color:#0a7a40;font-size:13px;font-weight:900;padding:0 6px}table{width:100%;border-collapse:collapse;font-size:12px}thead tr{background:#f2f7ff}th{padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:#4a7090;border-bottom:2px solid #dde8f5}td{padding:8px 10px;border-bottom:1px solid #f0f5fb;vertical-align:middle}tr:last-child td{border-bottom:none}.bench td{background:#f0fff8!important;font-weight:600}.explain{background:#f0f7ff;border:1px solid #c8dff5;border-left:4px solid #4da6ff;border-radius:6px;padding:9px 13px;margin-bottom:12px;font-size:11px;color:#2a4a6a;line-height:1.6}.warn{background:#fff8e6;border:1px solid #f5c842;border-radius:6px;padding:7px 11px;margin-bottom:12px;font-size:11px;color:#7a6000}.kw-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.comment-box{background:#f8faff;border:1px solid #dde8f5;border-left:4px solid #2edf8f;border-radius:8px;padding:18px 20px}.comment-box p{margin-bottom:9px;color:#2a3a4a;line-height:1.75}.comment-box p:last-child{margin-bottom:0}.footer{margin-top:44px;padding-top:18px;border-top:1px solid #e8f0f5;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#4a7090}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:1.5cm}}";
+  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><img src='https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg' alt='Sempai' style='height:28px;width:auto;display:block;'><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div><div style='background:#f0f9f4;border:1px solid #b8e8d0;border-left:4px solid #2edf8f;border-radius:8px;padding:16px 18px;margin-bottom:20px;font-size:12px;color:#1a4a30;line-height:1.8'><div style='font-weight:900;font-size:14px;color:#0a7a40;margin-bottom:12px'>📐 AI Share of Voice — skąd wynik i dlaczego różni się od Brand Radar</div><div style='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px'><div style='background:#e8f8f0;border-radius:7px;padding:12px 14px'><div style='font-weight:800;color:#0a5a30;margin-bottom:7px;font-size:11px;text-transform:uppercase;letter-spacing:0.7px'>Nasze narzędzie</div><div style='font-family:monospace;font-size:12px;line-height:2;color:#1a4a30'>Twoje wzmianki: <strong style='color:#0a7a40'>"+fN(totalM)+"</strong><br>Top 5 rywali: <strong>"+fN(top5CompM||0)+"</strong><br>SOV = "+fN(totalM)+" ÷ ("+fN(totalM)+"+"+fN(top5CompM||0)+") = <strong style='color:#0a7a40;font-size:15px'>"+sov+"%</strong></div><div style='margin-top:8px;font-size:10px;color:#206040'>Mianownik: Twoja marka + wszystkie marki auto-wykryte z danych</div></div><div style='background:#f0eeff;border-radius:7px;padding:12px 14px'><div style='font-weight:800;color:#3a1080;margin-bottom:7px;font-size:11px;text-transform:uppercase;letter-spacing:0.7px'>Ahrefs Brand Radar</div><div style='font-size:12px;color:#4a2090;line-height:1.8'>Liczy tylko konkurentów których <strong>ręcznie dodałeś</strong> w Brand Radar. Jeśli nie dodałeś największych graczy w branży — ich wzmianki nie trafiają do mianownika. Mały mianownik = wyższy %.</div><div style='margin-top:8px;font-size:10px;color:#3a1070'>Żeby wyrównać: dodaj w Brand Radar wszystkich głównych konkurentów których AI wymienia</div></div></div><div style='background:#fff8e0;border-radius:6px;padding:9px 13px;font-size:11px;color:#7a5a00;line-height:1.7'><strong>Wniosek:</strong> Oba wyniki są matematycznie poprawne — różnią się listą konkurentów w mianowniku. Nasz jest szerszy (wszyscy z danych), Brand Radar jest wąski (tylko dodani ręcznie).</div>+"<div style='margin-top:12px;padding-top:12px;border-top:1px solid #b8e8d0'>"+"<div style='font-size:11px;font-weight:800;color:#0a5a30;margin-bottom:8px'>Wszyscy konkurenci wykryci w Twoich danych — dodaj ich w Brand Radar:</div>"+"<table><thead><tr><th>#</th><th>Marka</th><th style='text-align:right'>Wzmianki AI</th><th style='text-align:right'>% mianownika</th></tr></thead><tbody>"+allComps.slice(0,30).map((c,i)=>{const cnt=compCounts[c]||0;const pct=totalCompM>0?Math.round((cnt/totalCompM)*100):0;return "<tr><td style='color:#8899aa'>"+( i+1)+"</td><td style='font-family:monospace;font-weight:600'>"+c+"</td><td style='text-align:right;font-family:monospace;color:#1a4a30'>"+fN(cnt)+"</td><td style='text-align:right;color:#4a7090'>"+pct+"%</td></tr>";}).join("")+(allComps.length>30 ? "<div style='font-size:10px;color:#4a7090;margin-top:5px'>... i "+(allComps.length-30)+" więcej</div>" : "")+"</tbody></table></div></div><section><h2><span class='num'>01</span>" AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmianką marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>04</span> Komentarz analityczny i rekomendacje</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
 }
