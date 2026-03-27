@@ -801,14 +801,14 @@ export default function App() {
               <div style={{background:"#040e1a",border:"1px solid #1a3a55",borderRadius:9,padding:"13px 14px"}}>
                 <div style={{fontSize:10,fontWeight:800,color:"#a78bfa",textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>Brand Radar — wąski mianownik</div>
                 <div style={{fontSize:12,color:"#8060b0",lineHeight:1.8}}>
-                  <div>SOV = Twoje wzm. ÷ (Twoje + <strong style={{color:"#c0a0ff"}}>tylko konkurenci których DODAŁEŚ</strong>)</div>
+                  <div>SOV = Twoje wzm. / (Twoje + <strong style={{color:"#c0a0ff"}}>tylko konkurenci których DODAŁEŚ</strong>)</div>
                   <div style={{marginTop:6,color:"#5040a0",fontSize:11}}>Jeśli nie dodałeś Militaria.pl — Ahrefs jej nie liczy w mianowniku. Mianownik jest mały → SOV wyższy.</div>
                 </div>
               </div>
               <div style={{background:"#040e1a",border:"1px solid #1a3a55",borderRadius:9,padding:"13px 14px"}}>
                 <div style={{fontSize:10,fontWeight:800,color:S.green,textTransform:"uppercase",letterSpacing:"0.8px",marginBottom:8}}>Nasze narzędzie — szeroki mianownik</div>
                 <div style={{fontSize:12,color:"#407050",lineHeight:1.8}}>
-                  <div>SOV = Twoje wzm. ÷ (Twoje + <strong style={{color:S.green}}>WSZYSCY których AI wymienił</strong> w danych)</div>
+                  <div>SOV = Twoje wzm. / (Twoje + <strong style={{color:S.green}}>WSZYSCY których AI wymienił</strong> w danych)</div>
                   <div style={{marginTop:6,color:"#205030",fontSize:11}}>Automatycznie wyciągamy każdą markę z kolumny Mentions. Mianownik jest duży → SOV niższy, ale bardziej realistyczny.</div>
                 </div>
               </div>
@@ -821,14 +821,14 @@ export default function App() {
                   <div><span style={{color:"#7060a0"}}>Militaria.pl (nie dodana):</span> 2 164</div>
                   <div><span style={{color:"#7060a0"}}>Kolba (nie dodana):</span> 537</div>
                   <div><span style={{color:"#7060a0"}}>Knivesandtools:</span> 96</div>
-                  <div style={{borderTop:"1px solid #1a3a55",marginTop:4,paddingTop:4}}><span style={{color:"#c0a0ff"}}>Nasze SOV = 205 ÷ 3055 =</span> <strong style={{color:S.green,fontSize:13}}>6.7%</strong></div>
+                  <div style={{borderTop:"1px solid #1a3a55",marginTop:4,paddingTop:4}}><span style={{color:"#c0a0ff"}}>Nasze SOV = 205 / 3055 =</span> <strong style={{color:S.green,fontSize:13}}>6.7%</strong></div>
                 </div>
                 <div style={{fontFamily:"monospace",fontSize:11,color:"#5090a8",lineHeight:2}}>
                   <div><span style={{color:S.green}}>Wzmianki marki:</span> 205</div>
                   <div><span style={{color:"#7060a0"}}>Dodany konkurent A:</span> ~400</div>
                   <div><span style={{color:"#7060a0"}}>Dodany konkurent B:</span> ~300</div>
                   <div style={{color:"#2a4050",fontSize:10}}>(Militaria.pl pominięta)</div>
-                  <div style={{borderTop:"1px solid #1a3a55",marginTop:4,paddingTop:4}}><span style={{color:"#c0a0ff"}}>Brand Radar SOV = 205 ÷ 905 =</span> <strong style={{color:"#c0a0ff",fontSize:13}}>~22%</strong></div>
+                  <div style={{borderTop:"1px solid #1a3a55",marginTop:4,paddingTop:4}}><span style={{color:"#c0a0ff"}}>Brand Radar SOV = 205 / 905 =</span> <strong style={{color:"#c0a0ff",fontSize:13}}>~22%</strong></div>
                 </div>
               </div>
               <div style={{marginTop:10,padding:"8px 11px",background:"#060018",borderRadius:6,fontSize:11,color:"#7050c0"}}>
@@ -1013,7 +1013,7 @@ export default function App() {
                     <div><span style={{color:"#4a7090"}}>Krok 1:</span> Ile razy AI wymienił Twoją markę? → <strong style={{color:S.green}}>{fmtN(totalM)} wzmianek</strong></div>
                     <div><span style={{color:"#4a7090"}}>Krok 2:</span> Ile razy AI wymienił top 5 konkurentów? → <strong style={{color:"#7aabbf"}}>{fmtN(top5CompM)} wzmianek</strong></div>
                     <div><span style={{color:"#4a7090"}}>Krok 3:</span> Zsumuj: {fmtN(totalM)} + {fmtN(top5CompM)} = <strong style={{color:S.text}}>{fmtN(totalM+top5CompM)} łącznie</strong></div>
-                    <div><span style={{color:"#4a7090"}}>Krok 4:</span> Podziel: {fmtN(totalM)} ÷ {fmtN(totalM+top5CompM)} × 100 = <strong style={{color:S.green,fontSize:15}}>{globalSOV}%</strong></div>
+                    <div><span style={{color:"#4a7090"}}>Krok 4:</span> Podziel: {fmtN(totalM)} / {fmtN(totalM+top5CompM)} x 100 = <strong style={{color:S.green,fontSize:15}}>{globalSOV}%</strong></div>
                   </div>
                 </div>
                 <div style={{fontSize:11,color:"#2a5060",padding:"6px 10px",background:"#010810",borderRadius:5,lineHeight:1.6}}>⚡ Ahrefs robi to samo ale dodatkowo waży każdą wzmiankę wolumenem wyszukiwań zapytania. Dlatego ich % może być wyższy — zapytania z dużym ruchem liczą się bardziej.</div>
@@ -1341,7 +1341,7 @@ export default function App() {
                        "Uwaga: AI częściej wymienia markę w negatywnym kontekście. Sprawdź które zapytania generują negatywne wzmianki."}
                     </div>
                     <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
-                      Wzór: (pozytywne - negatywne) ÷ łączne × 100
+                      Wzór: (pozytywne - negatywne) / łączne x 100
                     </div>
                   </div>
                 )}
@@ -1371,7 +1371,7 @@ export default function App() {
                        "Marka rzadko pojawia się w zapytaniach 'który polecasz'. To bezpośrednio wpływa na konwersje z AI."}
                     </div>
                     <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
-                      Wzór: wzmianki w rec-queries ÷ wszystkie rec-queries × 100
+                      Wzór: wzmianki w rec-queries / wszystkie rec-queries x 100
                     </div>
                   </div>
                 )}
@@ -1401,7 +1401,7 @@ export default function App() {
                        "AI bazuje głównie na zewnętrznych źródłach. Tworzysz mało treści lub Twoja strona ma niski autorytet."}
                     </div>
                     <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
-                      Wzór: linki z własnej domeny ÷ wszystkie linki w odpowiedziach × 100
+                      Wzór: linki z własnej domeny / wszystkie linki w odpowiedziach x 100
                     </div>
                   </div>
                 )}
@@ -1457,19 +1457,19 @@ export default function App() {
           <div style={{paddingTop:18,borderTop:"1px solid "+S.border}}>
             <div style={{fontSize:11,color:"#90c0d8",fontWeight:700,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>Slownik wskaznikow — co znaczy kazda liczba</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9}}>
-                <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.green+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>📊</span><span style={{fontSize:11,fontWeight:800,color:S.green}}>AI Share of Voice</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Twoje wzmianki ÷ (Twoje + konkurentów) × 100. Twój udział głosu w AI.</div></div>
+                <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.green+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>📊</span><span style={{fontSize:11,fontWeight:800,color:S.green}}>AI Share of Voice</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Twoje wzm. / (Twoje + konk.) x 100. Udział głosu w AI.</div></div>
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.purple+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>💬</span><span style={{fontSize:11,fontWeight:800,color:S.purple}}>Mention Rate</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>% zapytań z jakąkolwiek marką, gdzie AI wymienia Twoją. Rośnie przez content marketing.</div></div>
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.coral+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>🔗</span><span style={{fontSize:11,fontWeight:800,color:S.coral}}>Citation Rate</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>% zapytań gdzie AI podaje Twoją stronę jako link. Rośnie przez structured data i E-E-A-T.</div></div>
-                <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.sky+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>📡</span><span style={{fontSize:11,fontWeight:800,color:S.sky}}>Presence Score</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>(Wzm. + Cyt.x0.5) ÷ wszystkie zapytania. Łączna obecność w AI.</div></div>
+                <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.sky+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>📡</span><span style={{fontSize:11,fontWeight:800,color:S.sky}}>Presence Score</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>(Wzm. + Cyt.x0.5) / wszystkie zapytania. Łączna obecność w AI.</div></div>
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.gold+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>⚡</span><span style={{fontSize:11,fontWeight:800,color:S.gold}}>Quick Win</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Szansa z dysproporcji wskaźników. Weryfikuj ręcznie przed wdrożeniem.</div></div>
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+"#34d399"+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>🔍</span><span style={{fontSize:11,fontWeight:800,color:"#34d399"}}>Brand Variant</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Forma nazwy marki sprawdzana w Mentions. AI może pisać roznymi wariantami.</div></div>
             </div>
-          </div>
-          </div>
-          </div>
-          </div>
-          </div>
           <button onClick={()=>setTab("report")} style={{marginTop:20,padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Generuj Raport →</button>
+          </div>{/* close definitions outer */}
+          </div>{/* close advanced metrics grid */}
+          </div>{/* close card body */}
+          </div>{/* close section wrapper */}
+          </div>{/* close outer content */}
         </div>}
 
         {/* REPORT */}
