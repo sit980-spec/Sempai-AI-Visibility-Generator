@@ -1440,8 +1440,6 @@ export default function App() {
               </div>
             </div>
 
-            </div>
-            </div>
           </Card>
 
           {/* Spostrzeżenia */}
@@ -1467,6 +1465,8 @@ export default function App() {
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+S.gold+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>⚡</span><span style={{fontSize:11,fontWeight:800,color:S.gold}}>Quick Win</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Szansa z dysproporcji wskaźników. Weryfikuj ręcznie przed wdrożeniem.</div></div>
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+"#34d399"+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>🔍</span><span style={{fontSize:11,fontWeight:800,color:"#34d399"}}>Brand Variant</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Forma nazwy marki sprawdzana w Mentions. AI może pisać roznymi wariantami.</div></div>
             </div>
+          </div>
+          </div>
           <button onClick={()=>setTab("report")} style={{marginTop:20,padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Generuj Raport →</button>
           </div>
           </div>
