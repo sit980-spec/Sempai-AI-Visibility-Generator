@@ -787,9 +787,7 @@ export default function App() {
                   <div>Sekcja wewnątrz Brand Radar — <strong style={{color:"#2edf8f"}}>Brand Radar → AI Responses</strong></div>
                   <div style={{marginTop:6}}>Wybierasz agenta AI (np. ChatGPT), lokalizację (np. Poland) i klikasz Export</div>
                   <div style={{marginTop:8,padding:"6px 10px",background:"#001008",borderRadius:6,fontSize:11,color:"#206040"}}>Każdy agent i kraj = osobny plik CSV. Wgraj je wszystkie razem.</div>
-                </div>
-              </div>
-            </div>
+                </div></div></div>
             <div style={{padding:"12px 14px",background:"#080010",borderRadius:8,fontSize:12,color:"#8070b0",lineHeight:1.75}}>
               <strong style={{color:"#c0a0ff"}}>Dlaczego Brand Radar może pokazywać inny % niż nasze narzędzie?</strong> W Brand Radar widzisz SOV tylko dla wybranych przez Ciebie frazy monitorujących. Nasze narzędzie liczy po WSZYSTKICH zapytaniach z eksportu — im więcej plików i platform wgrasz, tym pełniejszy obraz. <strong style={{color:"#c0a0ff"}}>Oba wyniki są poprawne</strong> — Brand Radar to Twój wybrany zestaw fraz, nasze narzędzie to pełen eksport AI Responses.
             </div>
@@ -811,9 +809,7 @@ export default function App() {
                 <div style={{fontSize:12,color:"#407050",lineHeight:1.8}}>
                   <div>SOV = Twoje wzm. / (Twoje + <strong style={{color:S.green}}>WSZYSCY których AI wymienił</strong> w danych)</div>
                   <div style={{marginTop:6,color:"#205030",fontSize:11}}>Automatycznie wyciągamy każdą markę z kolumny Mentions. Mianownik jest duży → SOV niższy, ale bardziej realistyczny.</div>
-                </div>
-              </div>
-            </div>
+                </div></div></div>
             <div style={{background:"#0a0a14",borderRadius:8,padding:"12px 14px",fontSize:12,color:"#7090b0",lineHeight:1.8}}>
               <strong style={{color:"#90c8e0"}}>Przykład z prawdziwych danych (AI Overview, Ostry Sklep):</strong>
               <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -848,8 +844,7 @@ export default function App() {
                   </div>
                 </div>}
               </div>
-            </div>
-          </div>
+            </div></div>
 
           <button onClick={()=>setTab("setup")} style={{marginTop:16,padding:"12px 28px",background:S.green+"22",border:"2px solid "+S.green+"66",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>
             Rozumiem, zaczynam → ① Klient
@@ -1466,10 +1461,8 @@ export default function App() {
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+"#34d399"+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>🔍</span><span style={{fontSize:11,fontWeight:800,color:"#34d399"}}>Brand Variant</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Forma nazwy marki sprawdzana w Mentions. AI może pisać roznymi wariantami.</div></div>
             </div>
             <button onClick={()=>setTab("report")} style={{marginTop:20,padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Generuj Raport →</button>
-          </div>
-          </div>
-          </div>
-          </div>
+          </div></div>
+          </div></div>
           </div>
         </div>}
 
