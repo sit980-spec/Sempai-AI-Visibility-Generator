@@ -632,6 +632,17 @@ export default function App() {
   const buildArgs=()=>({brand,proc,totalQ,totalM,totalC,totalWB,sovDisplay:globalSOV,avgSOV,globalSOV,allComps,compCounts,best,worst,topBrandKws,topGapKws,allGapKws,editableComment,totalCompM,top5CompM,totalImpressions,totalGapQueries,finalComment:null});
 
 
+  // Pre-compute keyword browser data
+  const kwBrowserData=(()=>{
+    const PAGE=25;
+    const list = kwTab==="brand"
+      ? allBrandKws.filter(([kw])=>!kwSearch||kw.toLowerCase().includes(kwSearch.toLowerCase()))
+      : allGapKws.filter(([kw])=>!kwSearch||kw.toLowerCase().includes(kwSearch.toLowerCase()));
+    const page = list.slice(kwPage*PAGE, (kwPage+1)*PAGE);
+    const totalPages = Math.ceil(list.length/PAGE);
+    const isBrand = kwTab==="brand";
+    return {list, page, totalPages, isBrand, PAGE};
+  })();
   // Pre-compute opportunity cards (moved out of JSX IIFE to avoid esbuild context issues)
   const oppCards=(()=>{
     const ops=[];
@@ -1222,8 +1233,7 @@ export default function App() {
           {/* Keyword Browser */}
           {(allBrandKws.length>0||allGapKws.length>0)&&<Card style={{marginBottom:14,border:"1px solid #1a3050"}}>
             <SL color="#90c8e0">🔍 Przeglądarka zapytań — pełna lista</SL>
-            <div style={{fontSize:11,color:"#5090a8",marginBottom:12}}>Przeglądaj wszystkie zapytania z danych. Filtruj i szukaj po frazie.</div>
-            {/* Tabs */}
+            <div style={{fontSize:11,color:"#5090a8",marginBottom:12}}>Przeglądaj wszystkie zapytania. Filtruj po frazie, przełączaj zakładki.</div>
             <div style={{display:"flex",gap:8,marginBottom:12}}>
               <button onClick={()=>{setKwTab("brand");setKwPage(0);setKwSearch("");}} style={{padding:"6px 16px",borderRadius:8,border:"1px solid "+(kwTab==="brand"?S.green+"66":S.border),background:kwTab==="brand"?S.green+"18":"transparent",color:kwTab==="brand"?S.green:"#5090a8",fontSize:12,fontWeight:700,cursor:"pointer"}}>
                 🎯 Marka się pojawia ({allBrandKws.length})
@@ -1235,50 +1245,36 @@ export default function App() {
               <input value={kwSearch} onChange={e=>{setKwSearch(e.target.value);setKwPage(0);}} placeholder="Szukaj frazy..."
                 style={{background:S.navy1,border:"1px solid "+S.border,borderRadius:8,padding:"5px 11px",color:S.text,fontSize:12,outline:"none",width:180}}/>
             </div>
-            {(()=>{
-              const PAGE=25;
-              const list = kwTab==="brand"
-                ? allBrandKws.filter(([kw])=>!kwSearch||kw.toLowerCase().includes(kwSearch.toLowerCase()))
-                : allGapKws.filter(([kw])=>!kwSearch||kw.toLowerCase().includes(kwSearch.toLowerCase()));
-              const page = list.slice(kwPage*PAGE, (kwPage+1)*PAGE);
-              const totalPages = Math.ceil(list.length/PAGE);
-              const isBrand = kwTab==="brand";
-              return <>
-                <div style={{background:"#020a14",borderRadius:8,overflow:"hidden",border:"1px solid #0e2030"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead>
-                      <tr style={{background:"#030e1a",borderBottom:"1px solid #0e2030"}}>
-                        <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>#</th>
-                        <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>Zapytanie</th>
-                        <th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>Wolumen/mies.</th>
-                        {!isBrand&&<th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>AI wymienia zamiast</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {page.length===0&&<tr><td colSpan={isBrand?3:4} style={{padding:"16px 12px",textAlign:"center",color:"#3a6070",fontSize:12}}>Brak wyników dla "{kwSearch}"</td></tr>}
-                      {page.map(([kw,valOrObj],i)=>{
-                        const vol = isBrand ? valOrObj : valOrObj.vol;
-                        const comps = isBrand ? null : valOrObj.comps;
-                        const rowN = kwPage*PAGE+i+1;
-                        return <tr key={i} style={{borderBottom:"1px solid #0a1a28",background:i%2===0?"transparent":"#030c18"}}>
-                          <td style={{padding:"7px 12px",color:"#3a5070",fontSize:11,width:36}}>{rowN}</td>
-                          <td style={{padding:"7px 12px",color:isBrand?"#c0e0d0":"#c0d0e0",fontWeight:i<3?700:400}}>{kw}</td>
-                          <td style={{padding:"7px 12px",textAlign:"right",fontFamily:"monospace",color:"#5090a8",fontSize:11}}>{vol>0?fmtN(vol):"—"}</td>
-                          {!isBrand&&<td style={{padding:"7px 12px",color:"#c06070",fontSize:11}}>{(comps||[]).slice(0,3).join(", ")}</td>}
-                        </tr>;
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {totalPages>1&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:10}}>
-                  <button onClick={()=>setKwPage(p=>Math.max(0,p-1))} disabled={kwPage===0}
-                    style={{padding:"4px 12px",borderRadius:6,border:"1px solid "+S.border,background:"transparent",color:kwPage===0?"#2a4050":"#7aabbf",cursor:kwPage===0?"not-allowed":"pointer",fontSize:12}}>← Poprzednia</button>
-                  <span style={{fontSize:11,color:"#5090a8"}}>Strona {kwPage+1} z {totalPages} ({fmtN(list.length)} zapytań)</span>
-                  <button onClick={()=>setKwPage(p=>Math.min(totalPages-1,p+1))} disabled={kwPage>=totalPages-1}
-                    style={{padding:"4px 12px",borderRadius:6,border:"1px solid "+S.border,background:"transparent",color:kwPage>=totalPages-1?"#2a4050":"#7aabbf",cursor:kwPage>=totalPages-1?"not-allowed":"pointer",fontSize:12}}>Następna →</button>
-                </div>}
-              </>;
-            })()}
+            <div style={{background:"#020a14",borderRadius:8,overflow:"hidden",border:"1px solid #0e2030"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{background:"#030e1a",borderBottom:"1px solid #0e2030"}}>
+                    <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>#</th>
+                    <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>Zapytanie</th>
+                    <th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>Wolumen/mies.</th>
+                    {kwTab!=="brand"&&<th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#4a7090",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.7px"}}>AI wymienia zamiast</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {kwBrowserData.page.length===0&&<tr><td colSpan={kwTab==="brand"?3:4} style={{padding:"16px 12px",textAlign:"center",color:"#3a6070",fontSize:12}}>Brak wyników{kwSearch?" dla "+kwSearch:""}</td></tr>}
+                  {kwBrowserData.page.map(([kw,valOrObj],i)=>{
+                    const vol = kwTab==="brand" ? valOrObj : valOrObj.vol;
+                    const comps = kwTab==="brand" ? null : valOrObj.comps;
+                    return <tr key={i} style={{borderBottom:"1px solid #0a1a28",background:i%2===0?"transparent":"#030c18"}}>
+                      <td style={{padding:"7px 12px",color:"#3a5070",fontSize:11,width:36}}>{kwPage*25+i+1}</td>
+                      <td style={{padding:"7px 12px",color:kwTab==="brand"?"#c0e0d0":"#c0d0e0",fontWeight:i<3?700:400}}>{kw}</td>
+                      <td style={{padding:"7px 12px",textAlign:"right",fontFamily:"monospace",color:"#5090a8",fontSize:11}}>{vol>0?fmtN(vol):"—"}</td>
+                      {kwTab!=="brand"&&<td style={{padding:"7px 12px",color:"#c06070",fontSize:11}}>{(comps||[]).slice(0,3).join(", ")}</td>}
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {kwBrowserData.totalPages>1&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:10}}>
+              <button onClick={()=>setKwPage(p=>Math.max(0,p-1))} disabled={kwPage===0} style={{padding:"4px 12px",borderRadius:6,border:"1px solid "+S.border,background:"transparent",color:kwPage===0?"#2a4050":"#7aabbf",cursor:kwPage===0?"not-allowed":"pointer",fontSize:12}}>Poprzednia</button>
+              <span style={{fontSize:11,color:"#5090a8"}}>Strona {kwPage+1} z {kwBrowserData.totalPages} ({fmtN(kwBrowserData.list.length)} zapytań)</span>
+              <button onClick={()=>setKwPage(p=>Math.min(kwBrowserData.totalPages-1,p+1))} disabled={kwPage>=kwBrowserData.totalPages-1} style={{padding:"4px 12px",borderRadius:6,border:"1px solid "+S.border,background:"transparent",color:kwPage>=kwBrowserData.totalPages-1?"#2a4050":"#7aabbf",cursor:kwPage>=kwBrowserData.totalPages-1?"not-allowed":"pointer",fontSize:12}}>Następna</button>
+            </div>}
           </Card>}
 
           {/* Opportunities */}
