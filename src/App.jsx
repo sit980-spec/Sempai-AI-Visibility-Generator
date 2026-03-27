@@ -1458,7 +1458,6 @@ export default function App() {
           </div>
           </div>
           </div>
-          </div>
           <button onClick={()=>setTab("report")} style={{marginTop:20,padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Generuj Raport →</button>
         </div>}
 
