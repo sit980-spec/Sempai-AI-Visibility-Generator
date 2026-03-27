@@ -948,7 +948,7 @@ export default function App() {
           {filesLoaded>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,marginBottom:12}}>
             {PLATFORMS.map(p=>{const d=proc[p.id];const loaded=!!files[p.id];return (<div key={p.id} style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+(loaded?p.color+"44":S.border),borderRadius:10}}>
               <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}><span style={{background:p.color+"20",color:p.color,borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700}}>{p.icon} {p.name}</span>{loaded?<span style={{fontSize:10,color:S.green}}>✅</span>:<span style={{fontSize:10,color:S.muted}}>—</span>}</div>
-              {loaded?<><div style={{fontSize:9,color:S.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{files[p.id].filename}</div><div style={{fontSize:11,color:S.text,fontFamily:"monospace"}}>{fmtN(d.total)} zapytań — <span style={{color:S.green}}>{fmtN(d.mentions)} wzmianek</span> · <span style={{color:S.sky}}>{fmtN(d.citations)} cytowań</span></div><div style={{fontSize:10,color:"#6090a8",marginTop:2}}>W ilu zapytaniach pojawia się jakakolwiek marka: {fmtN(d.withAnyBrand)} ({fmtP(d.withAnyBrand,d.total)})</div></>:<div style={{fontSize:11,color:"#3a6080"}}>— wgraj CSV z Ahrefs dla tej platformy</div>}
+              {loaded?<div><div style={{fontSize:9,color:S.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{files[p.id].filename}</div><div style={{fontSize:11,color:S.text,fontFamily:"monospace"}}>{fmtN(d.total)} zapytań — <span style={{color:S.green}}>{fmtN(d.mentions)} wzmianek</span> · <span style={{color:S.sky}}>{fmtN(d.citations)} cytowań</span></div><div style={{fontSize:10,color:"#6090a8",marginTop:2}}>W ilu zapytaniach pojawia się jakakolwiek marka: {fmtN(d.withAnyBrand)} ({fmtP(d.withAnyBrand,d.total)})</div></div>:<div style={{fontSize:11,color:"#3a6080"}}>— wgraj CSV z Ahrefs dla tej platformy</div>}
             </div>);})}
           </div>}
           {unknownFiles.length>0&&<div style={{marginBottom:12,padding:"13px 15px",background:S.gold+"0a",border:"1px solid "+S.gold+"33",borderRadius:10}}>
@@ -1328,7 +1328,7 @@ export default function App() {
                 {globalSentScore===null ? (
                   <div style={{fontSize:11,color:"#3a6070"}}>Brak wystarczających danych — wgraj pliki z kolumną Response lub AI Overview.</div>
                 ) : (
-                  <>
+                  <div>
                     <div style={{fontSize:28,fontWeight:900,color:globalSentScore>20?S.green:globalSentScore>-20?"#f5c842":S.coral,marginBottom:8}}>{globalSentScore>0?"+":""}{globalSentScore}</div>
                     <div style={{display:"flex",gap:6,marginBottom:8}}>
                       <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:S.green+"18",color:S.green}}>✓ {totalSentPos} pozytywne</span>
@@ -1343,7 +1343,7 @@ export default function App() {
                     <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
                       Wzór: (pozytywne - negatywne) ÷ łączne × 100
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -1359,7 +1359,7 @@ export default function App() {
                 {globalRecRate===null||totalRecTotal===0 ? (
                   <div style={{fontSize:11,color:"#3a6070"}}>Brak zapytań z intencją rekomendacji (słowa: "polecasz", "najlepszy", "który warto" itp.).</div>
                 ) : (
-                  <>
+                  <div>
                     <div style={{fontSize:28,fontWeight:900,color:globalRecRate>30?S.green:globalRecRate>10?"#f5c842":S.coral,marginBottom:5}}>{globalRecRate}%</div>
                     <div style={{fontSize:11,color:"#7aabbf",marginBottom:8}}>{totalRecWithBrand} z {totalRecTotal} zapytań-rekomendacji</div>
                     <div style={{height:6,background:"#0e1e2e",borderRadius:3,overflow:"hidden",marginBottom:8}}>
@@ -1373,7 +1373,7 @@ export default function App() {
                     <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
                       Wzór: wzmianki w rec-queries ÷ wszystkie rec-queries × 100
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -1389,7 +1389,7 @@ export default function App() {
                 {globalControlRatio===null ? (
                   <div style={{fontSize:11,color:"#3a6070"}}>Brak danych o linkach — wgraj pliki z kolumną Link URL.</div>
                 ) : (
-                  <>
+                  <div>
                     <div style={{fontSize:28,fontWeight:900,color:globalControlRatio>50?S.green:globalControlRatio>25?"#f5c842":S.coral,marginBottom:5}}>{globalControlRatio}%</div>
                     <div style={{fontSize:11,color:"#7aabbf",marginBottom:8}}>{fmtN(totalOwnedLinks)} z {fmtN(totalAllLinks)} linków pochodzi z Twojej domeny</div>
                     <div style={{height:6,background:"#0e1e2e",borderRadius:3,overflow:"hidden",marginBottom:8}}>
@@ -1403,7 +1403,7 @@ export default function App() {
                     <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
                       Wzór: linki z własnej domeny ÷ wszystkie linki w odpowiedziach × 100
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 
