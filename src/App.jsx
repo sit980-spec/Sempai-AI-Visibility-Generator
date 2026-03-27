@@ -1,4 +1,4 @@
-import AdvancedMetrics from './AdvancedMetrics';
+import React from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -635,24 +635,24 @@ export default function App() {
 
 
   // Pre-compute insight cards for Spostrzeżenia section
-  const insightRatio = totalM > 0 ? totalC / totalM : null;
-  const insightCard1 = totalQ === 0 ? null
-    : totalM===0&&totalC===0
-    ? <div style={{padding:"10px 13px",background:S.muted+"08",border:"1px solid "+S.border,borderRadius:9}}><div style={{fontSize:11,color:S.muted}}>○ Brak obecności — marka niewidoczna dla AI.</div></div>
-    : totalM===0&&totalC>0
-    ? <div style={{padding:"10px 13px",background:S.gold+"08",border:"1px solid "+S.gold+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>! <strong style={{color:S.gold}}>Cytowana bez nazwy</strong> ({fmtN(totalC)} cyt, 0 wzm) — entity building priorytet.</div></div>
-    : (insightRatio!==null&&insightRatio>8)
-    ? <div style={{padding:"10px 13px",background:S.coral+"08",border:"1px solid "+S.coral+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>! <strong style={{color:S.coral}}>Dysproporcja</strong> {fmtN(totalC)} cyt vs {fmtN(totalM)} wzm — anchor texty.</div></div>
-    : (totalM>=5&&totalC>0&&insightRatio<0.15)
-    ? <div style={{padding:"10px 13px",background:S.purple+"08",border:"1px solid "+S.purple+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>! <strong style={{color:S.purple}}>Wzmianki bez cytowań</strong> — structured data.</div></div>
-    : <div style={{padding:"10px 13px",background:S.green+"08",border:"1px solid "+S.green+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>✓ <strong style={{color:S.green}}>Obecność potwierdzona:</strong> {fmtN(totalM)} wzm + {fmtN(totalC)} cyt.</div></div>;
+  // Helper functions for Spostrzeżenia insights (avoids JSX-in-variable parser issues)
+  function renderInsightCard1() {
+    const r = totalM > 0 ? totalC / totalM : null;
+    if (!totalQ) return null;
+    if (totalM===0&&totalC===0) return <div style={{padding:"10px 13px",background:S.muted+"08",border:"1px solid "+S.border,borderRadius:9}}><div style={{fontSize:11,color:S.muted}}>Brak obecności — marka niewidoczna dla AI.</div></div>;
+    if (totalM===0&&totalC>0) return <div style={{padding:"10px 13px",background:S.gold+"08",border:"1px solid "+S.gold+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}><strong style={{color:S.gold}}>Cytowana bez nazwy</strong> ({fmtN(totalC)} cyt, 0 wzm) — entity building priorytet.</div></div>;
+    if (r!==null&&r>8) return <div style={{padding:"10px 13px",background:S.coral+"08",border:"1px solid "+S.coral+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}><strong style={{color:S.coral}}>Dysproporcja</strong> {fmtN(totalC)} cyt vs {fmtN(totalM)} wzm — dodaj anchor texty z nazwą marki.</div></div>;
+    if (totalM>=5&&totalC>0&&r<0.15) return <div style={{padding:"10px 13px",background:S.purple+"08",border:"1px solid "+S.purple+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}><strong style={{color:S.purple}}>Wzmianki bez cytowań</strong> — wdróż structured data i Core Web Vitals.</div></div>;
+    return <div style={{padding:"10px 13px",background:S.green+"08",border:"1px solid "+S.green+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>✓ <strong style={{color:S.green}}>Obecność potwierdzona:</strong> {fmtN(totalM)} wzm + {fmtN(totalC)} cyt. Kontynuuj content plan.</div></div>;
+  }
+  function renderInsightCard2() {
+    if (!allComps.length) return null;
+    const tc=allComps[0]; const tc2=compCounts[tc]||0;
+    if (tc2>totalM*2) return <div style={{padding:"10px 13px",background:S.coral+"08",border:"1px solid "+S.coral+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>⚔️ <strong style={{color:S.coral}}>{tc} dominuje</strong>: {fmtN(tc2)} vs {fmtN(totalM)} Twoich wzm.</div></div>;
+    if (tc2>totalM) return <div style={{padding:"10px 13px",background:S.gold+"08",border:"1px solid "+S.gold+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>⚔️ <strong style={{color:S.gold}}>{tc} nieznacznie wyprzedza</strong> ({fmtN(tc2)} vs {fmtN(totalM)} wzm).</div></div>;
+    return <div style={{padding:"10px 13px",background:S.green+"08",border:"1px solid "+S.green+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>⚔️ <strong style={{color:S.green}}>Marka wyprzedza {tc}</strong> ({fmtN(tc2)} vs {fmtN(totalM)}).</div></div>;
+  }
 
-  const insightCard2 = allComps.length === 0 ? null
-    : (compCounts[allComps[0]]||0)>totalM*2
-    ? <div style={{padding:"10px 13px",background:S.coral+"08",border:"1px solid "+S.coral+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>⚔️ <strong style={{color:S.coral}}>{allComps[0]} dominuje</strong>: {fmtN(compCounts[allComps[0]]||0)} vs {fmtN(totalM)}.</div></div>
-    : (compCounts[allComps[0]]||0)>totalM
-    ? <div style={{padding:"10px 13px",background:S.gold+"08",border:"1px solid "+S.gold+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>⚔️ <strong style={{color:S.gold}}>{allComps[0]} nieznacznie wyprzedza</strong> ({fmtN(compCounts[allComps[0]]||0)} vs {fmtN(totalM)}).</div></div>
-    : <div style={{padding:"10px 13px",background:S.green+"08",border:"1px solid "+S.green+"22",borderRadius:9}}><div style={{fontSize:11,color:S.muted,lineHeight:1.55}}>⚔️ <strong style={{color:S.green}}>Marka wyprzedza {allComps[0]}</strong> ({fmtN(compCounts[allComps[0]]||0)} vs {fmtN(totalM)}).</div></div>;
   // Pre-compute keyword browser data
   const kwBrowserData=(()=>{
     const PAGE=25;
@@ -1311,19 +1311,138 @@ export default function App() {
               ))}            </div>
           </Card>
 
-          <AdvancedMetrics
-            globalSentScore={globalSentScore}
-            totalSentPos={totalSentPos}
-            totalSentNeg={totalSentNeg}
-            totalSentNeu={totalSentNeu}
-            globalRecRate={globalRecRate}
-            totalRecTotal={totalRecTotal}
-            totalRecWithBrand={totalRecWithBrand}
-            globalControlRatio={globalControlRatio}
-            totalOwnedLinks={totalOwnedLinks}
-            totalAllLinks={totalAllLinks}
-            fmtN={fmtN}
-          />
+          {/* Advanced Metrics — beyond Ahrefs */}
+          <Card style={{marginBottom:14,border:"1px solid #1a2a3a"}}>
+            <SL color="#90c8e0">🔬 Metryki zaawansowane — poza standardem Ahrefs</SL>
+            <Explain type="info"><strong>Skąd te dane?</strong> Narzędzie analizuje treść odpowiedzi AI z kolumny Response/AI Overview w Twoich plikach CSV. Sentiment = analiza słów kluczowych wokół wzmianki marki. Rekomendacje = zapytania zawierające słowa "polecasz", "najlepszy" itp. Control Ratio = % linków z Twojej własnej domeny vs zewnętrzne.</Explain>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+
+              {/* Metric 1: Sentiment */}
+              <div style={{background:"#040e18",border:"1px solid #0e2a3a",borderRadius:10,padding:"14px 15px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>
+                  <span style={{fontSize:16}}>😊</span>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:800,color:"#90c8e0"}}>Sentiment Score</div>
+                    <div style={{fontSize:9,color:"#4a7090",textTransform:"uppercase",letterSpacing:"0.7px"}}>Jakość wzmianek (-100 do +100)</div>
+                  </div>
+                </div>
+                {globalSentScore===null ? (
+                  <div style={{fontSize:11,color:"#3a6070"}}>Brak wystarczających danych — wgraj pliki z kolumną Response lub AI Overview.</div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:28,fontWeight:900,color:globalSentScore>20?S.green:globalSentScore>-20?"#f5c842":S.coral,marginBottom:8}}>{globalSentScore>0?"+":""}{globalSentScore}</div>
+                    <div style={{display:"flex",gap:6,marginBottom:8}}>
+                      <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:S.green+"18",color:S.green}}>✓ {totalSentPos} pozytywne</span>
+                      <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#4a709018",color:"#7aabbf"}}>~ {totalSentNeu} neutralne</span>
+                      <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:S.coral+"18",color:S.coral}}>✗ {totalSentNeg} negatywne</span>
+                    </div>
+                    <div style={{fontSize:10,color:"#3a6070",lineHeight:1.6}}>
+                      {globalSentScore>30?"AI wypowiada się o marce głównie pozytywnie — przewaga rekomendacji nad krytyką.":
+                       globalSentScore>-10?"AI wypowiada się o marce neutralnie — brak wyraźnego nastawienia.":
+                       "Uwaga: AI częściej wymienia markę w negatywnym kontekście. Sprawdź które zapytania generują negatywne wzmianki."}
+                    </div>
+                    <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
+                      Wzór: (pozytywne - negatywne) / łączne x 100
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Metric 2: Share of Recommendations */}
+              <div style={{background:"#040e18",border:"1px solid #0e2a3a",borderRadius:10,padding:"14px 15px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>
+                  <span style={{fontSize:16}}>🏆</span>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:800,color:"#90c8e0"}}>Share of Recommendations</div>
+                    <div style={{fontSize:9,color:"#4a7090",textTransform:"uppercase",letterSpacing:"0.7px"}}>Udział w zapytaniach-rekomendacjach</div>
+                  </div>
+                </div>
+                {globalRecRate===null||totalRecTotal===0 ? (
+                  <div style={{fontSize:11,color:"#3a6070"}}>Brak zapytań z intencją rekomendacji (słowa: "polecasz", "najlepszy", "który warto" itp.).</div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:28,fontWeight:900,color:globalRecRate>30?S.green:globalRecRate>10?"#f5c842":S.coral,marginBottom:5}}>{globalRecRate}%</div>
+                    <div style={{fontSize:11,color:"#7aabbf",marginBottom:8}}>{totalRecWithBrand} z {totalRecTotal} zapytań-rekomendacji</div>
+                    <div style={{height:6,background:"#0e1e2e",borderRadius:3,overflow:"hidden",marginBottom:8}}>
+                      <div style={{width:globalRecRate+"%",height:"100%",background:"linear-gradient(90deg,#f5c842,#2edf8f)",borderRadius:3}}/>
+                    </div>
+                    <div style={{fontSize:10,color:"#3a6070",lineHeight:1.6}}>
+                      {globalRecRate>30?"Silna pozycja w zapytaniach zakupowych — AI rekomenduje markę często.":
+                       globalRecRate>10?"Marka pojawia się w rekomendacjach, ale rzadko jako pierwsza.":
+                       "Marka rzadko pojawia się w zapytaniach 'który polecasz'. To bezpośrednio wpływa na konwersje z AI."}
+                    </div>
+                    <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
+                      Wzór: wzmianki w rec-queries / wszystkie rec-queries x 100
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Metric 3: Control Ratio */}
+              <div style={{background:"#040e18",border:"1px solid #0e2a3a",borderRadius:10,padding:"14px 15px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>
+                  <span style={{fontSize:16}}>🎛️</span>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:800,color:"#90c8e0"}}>Narrative Control Ratio</div>
+                    <div style={{fontSize:9,color:"#4a7090",textTransform:"uppercase",letterSpacing:"0.7px"}}>% cytowań z własnych mediów</div>
+                  </div>
+                </div>
+                {globalControlRatio===null ? (
+                  <div style={{fontSize:11,color:"#3a6070"}}>Brak danych o linkach — wgraj pliki z kolumną Link URL.</div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:28,fontWeight:900,color:globalControlRatio>50?S.green:globalControlRatio>25?"#f5c842":S.coral,marginBottom:5}}>{globalControlRatio}%</div>
+                    <div style={{fontSize:11,color:"#7aabbf",marginBottom:8}}>{fmtN(totalOwnedLinks)} z {fmtN(totalAllLinks)} linków pochodzi z Twojej domeny</div>
+                    <div style={{height:6,background:"#0e1e2e",borderRadius:3,overflow:"hidden",marginBottom:8}}>
+                      <div style={{width:globalControlRatio+"%",height:"100%",background:"linear-gradient(90deg,"+S.sky+","+S.green+")",borderRadius:3}}/>
+                    </div>
+                    <div style={{fontSize:10,color:"#3a6070",lineHeight:1.6}}>
+                      {globalControlRatio>60?"AI czerpie wiedzę głównie z Twoich treści — dobra kontrola narracji.":
+                       globalControlRatio>30?"AI miesza Twoje i zewnętrzne źródła — zadbaj o więcej własnego contentu.":
+                       "AI bazuje głównie na zewnętrznych źródłach. Tworzysz mało treści lub Twoja strona ma niski autorytet."}
+                    </div>
+                    <div style={{fontSize:9,color:"#2a4050",marginTop:6,padding:"4px 7px",background:"#020a14",borderRadius:4}}>
+                      Wzór: linki z własnej domeny / wszystkie linki w odpowiedziach x 100
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Hallucination checklist — manual */}
+            <div style={{marginTop:12,padding:"12px 14px",background:"#0a0614",border:"1px solid #2a1040",borderRadius:9}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <span style={{fontSize:14}}>🧠</span>
+                <div style={{fontSize:11,fontWeight:800,color:"#c0a0ff"}}>AI Hallucination Rate — weryfikacja ręczna</div>
+                <span style={{fontSize:9,color:"#7050c0",background:"#2a1040",borderRadius:4,padding:"1px 6px",fontWeight:700}}>MANUAL REVIEW</span>
+              </div>
+              <div style={{fontSize:11,color:"#8070b0",lineHeight:1.7,marginBottom:10}}>
+                Halucynacji AI nie da się wykryć automatycznie z danych CSV — wymaga manualnego sprawdzenia. Przejrzyj próbkę odpowiedzi AI w Ahrefs i zaznacz co znalazłeś:
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                {[
+                  {icon:"💰",label:"Błędne ceny lub parametry produktów"},
+                  {icon:"📍",label:"Błędna lokalizacja lub dane kontaktowe"},
+                  {icon:"📅",label:"Nieaktualne informacje (stare oferty, zamknięte sklepy)"},
+                  {icon:"⚠️",label:"Fałszywe porównania z konkurentami"},
+                  {icon:"🔗",label:"AI cytuje negatywne treści o marce (Reddit, forum)"},
+                  {icon:"✅",label:"Brak halucynacji — dane są poprawne"},
+                ].map((item,i)=>(
+                  <label key={i} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 10px",background:"#060210",border:"1px solid #1a1030",borderRadius:7,cursor:"pointer"}}>
+                    <input type="checkbox" style={{marginTop:2,accentColor:"#a78bfa"}}/>
+                    <span style={{fontSize:11,color:"#9080c0",lineHeight:1.5}}>{item.icon} {item.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{fontSize:10,color:"#4a3060",marginTop:8}}>
+                Jeśli znajdziesz halucynacje — zaktualizuj treści na stronie, dodaj structured data FAQ i zgłoś feedback do danej platformy AI.
+              </div>
+            </div>
+
+            </div>
+            </div>
+          </Card>
 
           {/* Spostrzeżenia */}
           <Card style={{marginBottom:14}}>
@@ -1332,8 +1451,8 @@ export default function App() {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
               {best&&<div style={{padding:"10px 13px",background:S.green+"08",border:"1px solid "+S.green+"22",borderRadius:9}}><div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{color:S.green,fontWeight:900,flexShrink:0}}>↑</span><span style={{fontSize:11,color:"#90b8cc",lineHeight:1.6}}><strong style={{color:S.green}}>Najlepsza: {best.platform}</strong> SOV {best.sov}% — {best.sov>=30?"silna pozycja, utrzymuj.":best.sov>=10?"umiarkowana, rozbuduj FAQ i how-to.":"niska, twórz dedykowany content."}</span></div></div>}
               {worst&&worst!==best&&<div style={{padding:"10px 13px",background:S.coral+"08",border:"1px solid "+S.coral+"22",borderRadius:9}}><div style={{display:"flex",gap:7,alignItems:"flex-start"}}><span style={{color:S.coral,fontWeight:900,flexShrink:0}}>↓</span><span style={{fontSize:11,color:"#90b8cc",lineHeight:1.6}}><strong style={{color:S.coral}}>Do działania: {worst.platform}</strong> SOV {worst.sov}% — {worst.sov===0?"marka całkowicie nieobecna. Zbadaj zapytania tej platformy.":"najniższy SOV. Twórz content w formacie tej platformy."}</span></div></div>}
-              {insightCard1}
-              {insightCard2}
+              {renderInsightCard1()}
+              {renderInsightCard2()}
             </div>
           </Card>
 
@@ -1349,9 +1468,9 @@ export default function App() {
                 <div style={{padding:"11px 13px",background:S.navy2,border:"1px solid "+"#34d399"+"18",borderRadius:9}}><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>🔍</span><span style={{fontSize:11,fontWeight:800,color:"#34d399"}}>Brand Variant</span></div><div style={{fontSize:11,color:"#8ab0c4",lineHeight:1.65}}>Forma nazwy marki sprawdzana w Mentions. AI może pisać roznymi wariantami.</div></div>
             </div>
           <button onClick={()=>setTab("report")} style={{marginTop:20,padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Generuj Raport →</button>
-          </div>{/* close definitions outer */}
-          </div>{/* close advanced metrics grid */}
-          </div>{/* close outer content */}
+          </div>
+          </div>
+          </div>
         </div>}
 
         {/* REPORT */}
@@ -1610,7 +1729,7 @@ export default function App() {
   );
 }
 
-function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,globalSOV,allComps,compCounts,best,worst,topBrandKws,topGapKws,allGapKws,editableComment,totalCompM,top5CompM,finalComment,recsHtml}) {
+function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,globalSOV,allComps,compCounts,best,worst,topBrandKws,topGapKws,allGapKws,editableComment,totalCompM,top5CompM,totalImpressions,totalGapQueries,finalComment,recsHtml}) {
   function fN(n){return(n||0).toLocaleString("pl-PL");}
   function fP(n,d){if(!d)return"0%";const v=(n/d)*100;if(v===0)return"0%";if(v<1)return v.toFixed(1)+"%";return Math.round(v)+"%";}
   function cSOV(m,cs){const ct=Object.values(cs||{}).reduce((s,v)=>s+v,0);return m+ct>0?Math.round((m/(m+ct))*100):0;}
@@ -1667,5 +1786,5 @@ function buildReportHTML({brand,proc,totalQ,totalM,totalC,totalWB,avgSOV,globalS
   const bHtml=topBrandKws.length>0?"<table><thead><tr><th>Zapytanie</th><th style='text-align:right'>Wolumen</th></tr></thead><tbody>"+topBrandKws.map(([kw,vol])=>"<tr><td>"+kw+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
   const gapList=topGapKws&&topGapKws.length>0?topGapKws:(allGapKws||topGapKws);const gHtml=gapList&&gapList.length>0?"<table><thead><tr><th>Zapytanie</th><th>AI wymienia</th><th style='text-align:right'>Vol.</th></tr></thead><tbody>"+gapList.map(([kw,{vol,comps}])=>"<tr><td>"+kw+"</td><td style='color:#e03050;font-size:11px'>"+comps.join(", ")+"</td><td style='text-align:right;color:#4a7090;font-size:11px'>"+fN(vol)+"</td></tr>").join("")+"</tbody></table>":"<p style='color:#4a7090;font-size:12px'>Brak danych</p>";
   const css="body{font-family:'DM Sans',sans-serif;background:#fff;color:#1a2a3a;font-size:14px;line-height:1.6;margin:0}.page{max-width:960px;margin:0 auto;padding:46px 42px}.header{border-bottom:3px solid #2edf8f;padding-bottom:22px;margin-bottom:28px}h1{font-size:24px;font-weight:900;color:#07111f;margin-bottom:5px}.meta{color:#4a7090;font-size:13px}.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:28px}.kpi{background:#f8faff;border:1px solid #dde8f5;border-radius:11px;padding:16px 13px;border-top:3px solid}.kl{font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#4a7090;margin-bottom:6px}.kv{font-size:26px;font-weight:900;line-height:1;margin-bottom:3px}.ks{font-size:10px;color:#8899aa}.ke{font-size:10px;color:#3a5a70;line-height:1.5;margin-top:5px;padding-top:5px;border-top:1px solid #e0eaf5;font-family:monospace}section{margin-bottom:32px}h2{font-size:17px;font-weight:900;color:#07111f;margin-bottom:14px;padding-bottom:9px;border-bottom:2px solid #eef2f8;display:flex;align-items:center;gap:10px}.num{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;background:#2edf8f22;border-radius:7px;color:#0a7a40;font-size:13px;font-weight:900;padding:0 6px}table{width:100%;border-collapse:collapse;font-size:12px}thead tr{background:#f2f7ff}th{padding:8px 10px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;color:#4a7090;border-bottom:2px solid #dde8f5}td{padding:8px 10px;border-bottom:1px solid #f0f5fb;vertical-align:middle}tr:last-child td{border-bottom:none}.bench td{background:#f0fff8!important;font-weight:600}.explain{background:#f0f7ff;border:1px solid #c8dff5;border-left:4px solid #4da6ff;border-radius:6px;padding:9px 13px;margin-bottom:12px;font-size:11px;color:#2a4a6a;line-height:1.6}.warn{background:#fff8e6;border:1px solid #f5c842;border-radius:6px;padding:7px 11px;margin-bottom:12px;font-size:11px;color:#7a6000}.kw-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.comment-box{background:#f8faff;border:1px solid #dde8f5;border-left:4px solid #2edf8f;border-radius:8px;padding:18px 20px}.comment-box p{margin-bottom:9px;color:#2a3a4a;line-height:1.75}.comment-box p:last-child{margin-bottom:0}.footer{margin-top:44px;padding-top:18px;border-top:1px solid #e8f0f5;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#4a7090}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{margin:1.5cm}}";
-  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><img src='https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg' alt='Sempai' style='height:28px;width:auto;display:block;'><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"+")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div>"+"<div style='background:#f4fff8;border:1px solid #b0e8c0;border-left:5px solid #2edf8f;border-radius:10px;padding:22px 24px;margin-bottom:24px;font-size:13px;line-height:1.9'>"+"<div style='font-weight:900;font-size:17px;color:#0a6a40;margin-bottom:18px'>📐 Jak liczymy każdą metrykę — krok po kroku</div>"+"<div style='background:#e4f7ee;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#0a5a30;font-size:14px;margin-bottom:8px'>① AI Share of Voice (SOV) = <span style='color:#0a7a40;font-size:16px'>"+sov+"%</span></div>"+"<div style='color:#1a4a30;margin-bottom:10px'><strong>Co to znaczy:</strong> Jaki procent wszystkich wzmianek marek w odpowiedziach AI należy do Twojej marki? Wyobraź sobie że AI ma 1000 wypowiedzi o tej branży — w ilu pojawia się Twoja marka?</div>"+"<div style='font-family:monospace;font-size:12px;background:#d8f0e4;padding:12px 14px;border-radius:7px;line-height:2.4;color:#0a4028'>"+"Krok 1: Ile razy AI wymienił Twoją markę? → "+fN(totalM)+" wzmianek<br>"+"Krok 2: Ile razy AI wymienił top 5 konkurentów? → "+fN(top5CompM||0)+" wzmianek<br>"+"Krok 3: Łącznie: "+fN(totalM)+" + "+fN(top5CompM||0)+" = "+fN(totalM+(top5CompM||0))+" wzmianek<br>"+"Krok 4: "+fN(totalM)+" ÷ "+fN(totalM+(top5CompM||0))+" × 100 = <strong style='font-size:16px;color:#0a7a40'>"+sov+"%</strong></div>"+"<div style='margin-top:10px;font-size:11px;color:#206040;background:#e0f5ea;padding:8px 12px;border-radius:5px'><strong>Dlaczego Ahrefs Brand Radar pokazuje inny %:</strong> Ahrefs waży każdą wzmiankę wolumenem wyszukiwań zapytania — popularne frazy mają większą wagę. My liczymy każdą wzmiankę jako 1. Dlatego nasze % są zazwyczaj niższe ale bardziej konserwatywne.</div>"+"</div>"+"<div style='background:#f0eeff;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#3a1090;font-size:14px;margin-bottom:8px'>② Mentions (wzmianki) = <span style='color:#5010b0;font-size:16px'>"+fN(totalM)+"</span></div>"+"<div style='color:#2a1060;margin-bottom:10px'><strong>Co to znaczy:</strong> Ile razy AI napisał nazwę Twojej marki w odpowiedzi? Sprawdzamy kolumnę Mentions w każdym wierszu pliku CSV.</div>"+"<div style='font-family:monospace;font-size:12px;background:#e8e0ff;padding:12px 14px;border-radius:7px;line-height:2.4;color:#2a1060'>"+"Krok 1: Plik CSV ma "+fN(totalQ)+" wierszy (każdy = jedno zapytanie AI)<br>"+"Krok 2: Sprawdzamy kolumnę Mentions w każdym wierszu<br>"+"Krok 3: Jeśli zawiera nazwę marki → +1 do licznika<br>"+"Wynik: <strong style='font-size:16px;color:#5010b0'>"+fN(totalM)+"</strong> wierszy z nazwą marki z "+fN(totalQ)+" łącznie</div>"+"</div>"+"<div style='background:#e8f4ff;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#0a3070;font-size:14px;margin-bottom:8px'>③ Citations (cytowania) = <span style='color:#0a4090;font-size:16px'>"+fN(totalC)+"</span></div>"+"<div style='color:#1a3050;margin-bottom:10px'><strong>Co to znaczy:</strong> Ile razy AI dodał link do Twojej strony? To inna rzecz niż wzmianka — AI może Cię linkować bez wymieniania nazwy (anonimowy ekspert) lub wymieniać bez linka.</div>"+"<div style='font-family:monospace;font-size:12px;background:#d8ecff;padding:12px 14px;border-radius:7px;line-height:2.4;color:#0a2848'>"+"Krok 1: Sprawdzamy kolumnę Link URL w każdym wierszu CSV<br>"+"Krok 2: Jeśli URL zawiera Twoją domenę → +1 do licznika<br>"+"Wynik: <strong style='font-size:16px;color:#0a4090'>"+fN(totalC)+"</strong> wierszy z linkiem do domeny ("+fP(totalC,totalQ)+" zapytań)</div>"+"</div>"+"<div style='background:#fff3f0;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#7a2010;font-size:14px;margin-bottom:8px'>④ Estimated Impressions = <span style='color:#b03010;font-size:16px'>"+fN(totalImpressions||0)+"</span></div>"+"<div style='color:#5a2010;margin-bottom:10px'><strong>Co to znaczy:</strong> To NIE są kliknięcia. To suma miesięcznych wyszukiwań dla zapytań gdzie AI wymienił markę. Ile razy miesięcznie ludzie zadają pytania, na które AI odpowiada wymieniając Twoją markę.</div>"+"<div style='font-family:monospace;font-size:12px;background:#ffe8e0;padding:12px 14px;border-radius:7px;line-height:2.4;color:#4a1008'>"+"Krok 1: Bierzemy tylko zapytania z wzmianką marki ("+fN(totalM)+" szt.)<br>"+"Krok 2: Dla każdego patrzymy na kolumnę Volume (ile wyszukiwań/mies.)<br>"+"Krok 3: Sumujemy wszystkie Volume<br>"+"Wynik: <strong style='font-size:16px;color:#b03010'>"+fN(totalImpressions||0)+"</strong> potencjalnych wyświetleń miesięcznie (nie kliknięć!)</div>"+"</div>"+"<div style='background:#fffbe8;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#6a4a00;font-size:14px;margin-bottom:8px'>⑤ Visibility Gap (luki) = <span style='color:#806000;font-size:16px'>"+fN(totalGapQueries||0)+" zapytań</span></div>"+"<div style='color:#4a3000;margin-bottom:10px'><strong>Co to znaczy:</strong> Ile zapytań obsługuje AI dla konkurentów, a pomija Twoją markę? Każde takie zapytanie to temat do pokrycia contentem.</div>"+"<div style='font-family:monospace;font-size:12px;background:#fff3c0;padding:12px 14px;border-radius:7px;line-height:2.4;color:#3a2800'>"+"Krok 1: Dla każdego zapytania: czy AI wymienił konkurenta? <br>"+"Krok 2: Jeśli tak → czy wymienił też Twoją markę?<br>"+"Krok 3: Konkurent TAK, Twoja marka NIE → luka!<br>"+"Wynik: <strong style='font-size:16px;color:#806000'>"+fN(totalGapQueries||0)+"</strong> zapytań do pokrycia contentem</div>"+"</div>"+(allComps.length>0 ? "<div style='background:#f8f4ff;border-radius:8px;padding:14px 16px;border-top:2px solid #d0c0ff'>"+"<div style='font-weight:800;color:#3a1090;font-size:13px;margin-bottom:10px'>Wszyscy konkurenci wykryci w danych — dodaj ich w Brand Radar</div>"+"<table><thead><tr><th>#</th><th>Marka</th><th style='text-align:right'>Wzmianki AI</th><th style='text-align:right'>% mianownika SOV</th></tr></thead><tbody>"+allComps.slice(0,30).map((c,i)=>{const cnt=compCounts[c]||0;const pct=totalCompM>0?Math.round((cnt/totalCompM)*100):0;return "<tr><td style='color:#8899aa'>"+(i+1)+"</td><td style='font-family:monospace;font-weight:600'>"+c+"</td><td style='text-align:right;font-family:monospace;color:#1a4a30'>"+fN(cnt)+"</td><td style='text-align:right;color:#4a7090'>"+pct+"%</td></tr>";}).join("")+(allComps.length>30 ? "<tr><td colspan=\"4\" style=\"color:#8899aa;text-align:center;font-size:11px\">... i "+(allComps.length-30)+" więcej</td></tr>" : "")+"</tbody></table></div></div>"<section><h2><span class='num'>01</span>" AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmianką marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>04</span> Komentarz analityczny i rekomendacje</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
+  return "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Sempai AI Visibility — "+(brand.name||"Raport")+"</title><style>"+css+"</style></head><body><div class='page'><div class='header'><div style='display:flex;align-items:center;gap:9px;margin-bottom:12px'><img src='https://sempai.pl/wp-content/uploads/2023/01/Sempai_logo_granat.svg' alt='Sempai' style='height:28px;width:auto;display:block;'><span style='font-size:10px;font-weight:700;color:#2edf8f;background:#2edf8f15;border:1px solid #2edf8f44;border-radius:4px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase'>AI Visibility</span></div><h1>Raport Widoczno&#347;ci AI</h1><p class='meta'>Klient: <strong>"+(brand.name||"—")+"</strong>"+(brand.url?" &middot; <strong>"+brand.url+"</strong>":"")+" &middot; "+date+"</p></div><div class='kpi-grid'><div class='kpi' style='border-top-color:#2edf8f'><div class='kl'>AI Share of Voice</div><div class='kv' style='color:#2edf8f'>"+avgSOV+"%</div><div class='ks'>"+(avgSOV>=30?"Silna pozycja":avgSOV>=10?"Umiarkowana":"Niska — priorytet dzia&#322;a&#324;")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalM+(totalCompM||0))+" &#322;&#261;cznie = "+avgSOV+"%</div></div><div class='kpi' style='border-top-color:#a78bfa'><div class='kl'>Mention Rate</div><div class='kv' style='color:#a78bfa'>"+fP(totalM,totalWB)+"</div><div class='ks'>"+(totalM>=5?"AI cz&#281;sto wymienia mark&#281;":totalM>=1?"AI sporadycznie wymienia":"AI nie wymienia nazwy marki")+"</div><div class='ke'>"+fN(totalM)+" wzmianek ÷ "+fN(totalWB)+" zapytań z markami</div></div><div class='kpi' style='border-top-color:#ff5c6a'><div class='kl'>Citation Rate</div><div class='kv' style='color:#ff5c6a'>"+fP(totalC,totalQ)+"</div><div class='ks'>"+(totalC>=5?"Strona cz&#281;sto cytowana":totalC>=1?"Strona sporadycznie cytowana":"Strona rzadko cytowana")+"</div><div class='ke'>"+fN(totalC)+" cytowań ÷ "+fN(totalQ)+" zapytań</div></div><div class='kpi' style='border-top-color:#f5c842'><div class='kl'>&#322;&#261;czne zapytania</div><div class='kv' style='color:#f5c842'>"+fN(totalQ)+"</div><div class='ks'>"+PLATFORMS.filter(p=>proc[p.id].total>0).length+" platform z danymi</div><div class='ke'>Z jak&#261;kolwiek mark&#261;: "+fN(totalWB)+"</div></div></div>"+"<div style='background:#f4fff8;border:1px solid #b0e8c0;border-left:5px solid #2edf8f;border-radius:10px;padding:22px 24px;margin-bottom:24px;font-size:13px;line-height:1.9'>"+"<div style='font-weight:900;font-size:17px;color:#0a6a40;margin-bottom:18px'>📐 Jak liczymy każdą metrykę — krok po kroku</div>"+"<div style='background:#e4f7ee;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#0a5a30;font-size:14px;margin-bottom:8px'>① AI Share of Voice (SOV) = <span style='color:#0a7a40;font-size:16px'>"+sov+"%</span></div>"+"<div style='color:#1a4a30;margin-bottom:10px'><strong>Co to znaczy:</strong> Jaki procent wszystkich wzmianek marek w odpowiedziach AI należy do Twojej marki? Wyobraź sobie że AI ma 1000 wypowiedzi o tej branży — w ilu pojawia się Twoja marka?</div>"+"<div style='font-family:monospace;font-size:12px;background:#d8f0e4;padding:12px 14px;border-radius:7px;line-height:2.4;color:#0a4028'>"+"Krok 1: Ile razy AI wymienił Twoją markę? → "+fN(totalM)+" wzmianek<br>"+"Krok 2: Ile razy AI wymienił top 5 konkurentów? → "+fN(top5CompM||0)+" wzmianek<br>"+"Krok 3: Łącznie: "+fN(totalM)+" + "+fN(top5CompM||0)+" = "+fN(totalM+(top5CompM||0))+" wzmianek<br>"+"Krok 4: "+fN(totalM)+" ÷ "+fN(totalM+(top5CompM||0))+" × 100 = <strong style='font-size:16px;color:#0a7a40'>"+sov+"%</strong></div>"+"<div style='margin-top:10px;font-size:11px;color:#206040;background:#e0f5ea;padding:8px 12px;border-radius:5px'><strong>Dlaczego Ahrefs Brand Radar pokazuje inny %:</strong> Ahrefs waży każdą wzmiankę wolumenem wyszukiwań zapytania — popularne frazy mają większą wagę. My liczymy każdą wzmiankę jako 1. Dlatego nasze % są zazwyczaj niższe ale bardziej konserwatywne.</div>"+"</div>"+"<div style='background:#f0eeff;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#3a1090;font-size:14px;margin-bottom:8px'>② Mentions (wzmianki) = <span style='color:#5010b0;font-size:16px'>"+fN(totalM)+"</span></div>"+"<div style='color:#2a1060;margin-bottom:10px'><strong>Co to znaczy:</strong> Ile razy AI napisał nazwę Twojej marki w odpowiedzi? Sprawdzamy kolumnę Mentions w każdym wierszu pliku CSV.</div>"+"<div style='font-family:monospace;font-size:12px;background:#e8e0ff;padding:12px 14px;border-radius:7px;line-height:2.4;color:#2a1060'>"+"Krok 1: Plik CSV ma "+fN(totalQ)+" wierszy (każdy = jedno zapytanie AI)<br>"+"Krok 2: Sprawdzamy kolumnę Mentions w każdym wierszu<br>"+"Krok 3: Jeśli zawiera nazwę marki → +1 do licznika<br>"+"Wynik: <strong style='font-size:16px;color:#5010b0'>"+fN(totalM)+"</strong> wierszy z nazwą marki z "+fN(totalQ)+" łącznie</div>"+"</div>"+"<div style='background:#e8f4ff;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#0a3070;font-size:14px;margin-bottom:8px'>③ Citations (cytowania) = <span style='color:#0a4090;font-size:16px'>"+fN(totalC)+"</span></div>"+"<div style='color:#1a3050;margin-bottom:10px'><strong>Co to znaczy:</strong> Ile razy AI dodał link do Twojej strony? To inna rzecz niż wzmianka — AI może Cię linkować bez wymieniania nazwy (anonimowy ekspert) lub wymieniać bez linka.</div>"+"<div style='font-family:monospace;font-size:12px;background:#d8ecff;padding:12px 14px;border-radius:7px;line-height:2.4;color:#0a2848'>"+"Krok 1: Sprawdzamy kolumnę Link URL w każdym wierszu CSV<br>"+"Krok 2: Jeśli URL zawiera Twoją domenę → +1 do licznika<br>"+"Wynik: <strong style='font-size:16px;color:#0a4090'>"+fN(totalC)+"</strong> wierszy z linkiem do domeny ("+fP(totalC,totalQ)+" zapytań)</div>"+"</div>"+"<div style='background:#fff3f0;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#7a2010;font-size:14px;margin-bottom:8px'>④ Estimated Impressions = <span style='color:#b03010;font-size:16px'>"+fN(totalImpressions||0)+"</span></div>"+"<div style='color:#5a2010;margin-bottom:10px'><strong>Co to znaczy:</strong> To NIE są kliknięcia. To suma miesięcznych wyszukiwań dla zapytań gdzie AI wymienił markę. Ile razy miesięcznie ludzie zadają pytania, na które AI odpowiada wymieniając Twoją markę.</div>"+"<div style='font-family:monospace;font-size:12px;background:#ffe8e0;padding:12px 14px;border-radius:7px;line-height:2.4;color:#4a1008'>"+"Krok 1: Bierzemy tylko zapytania z wzmianką marki ("+fN(totalM)+" szt.)<br>"+"Krok 2: Dla każdego patrzymy na kolumnę Volume (ile wyszukiwań/mies.)<br>"+"Krok 3: Sumujemy wszystkie Volume<br>"+"Wynik: <strong style='font-size:16px;color:#b03010'>"+fN(totalImpressions||0)+"</strong> potencjalnych wyświetleń miesięcznie (nie kliknięć!)</div>"+"</div>"+"<div style='background:#fffbe8;border-radius:8px;padding:14px 16px;margin-bottom:14px'>"+"<div style='font-weight:800;color:#6a4a00;font-size:14px;margin-bottom:8px'>⑤ Visibility Gap (luki) = <span style='color:#806000;font-size:16px'>"+fN(totalGapQueries||0)+" zapytań</span></div>"+"<div style='color:#4a3000;margin-bottom:10px'><strong>Co to znaczy:</strong> Ile zapytań obsługuje AI dla konkurentów, a pomija Twoją markę? Każde takie zapytanie to temat do pokrycia contentem.</div>"+"<div style='font-family:monospace;font-size:12px;background:#fff3c0;padding:12px 14px;border-radius:7px;line-height:2.4;color:#3a2800'>"+"Krok 1: Dla każdego zapytania: czy AI wymienił konkurenta? <br>"+"Krok 2: Jeśli tak → czy wymienił też Twoją markę?<br>"+"Krok 3: Konkurent TAK, Twoja marka NIE → luka!<br>"+"Wynik: <strong style='font-size:16px;color:#806000'>"+fN(totalGapQueries||0)+"</strong> zapytań do pokrycia contentem</div>"+"</div>"+(allComps.length>0 ? "<div style='background:#f8f4ff;border-radius:8px;padding:14px 16px;border-top:2px solid #d0c0ff'>"+"<div style='font-weight:800;color:#3a1090;font-size:13px;margin-bottom:10px'>Wszyscy konkurenci wykryci w danych — dodaj ich w Brand Radar</div>"+"<table><thead><tr><th>#</th><th>Marka</th><th style='text-align:right'>Wzmianki AI</th><th style='text-align:right'>% mianownika SOV</th></tr></thead><tbody>"+allComps.slice(0,30).map((c,i)=>{const cnt=compCounts[c]||0;const pct=totalCompM>0?Math.round((cnt/totalCompM)*100):0;return "<tr><td style='color:#8899aa'>"+(i+1)+"</td><td style='font-family:monospace;font-weight:600'>"+c+"</td><td style='text-align:right;font-family:monospace;color:#1a4a30'>"+fN(cnt)+"</td><td style='text-align:right;color:#4a7090'>"+pct+"%</td></tr>";}).join("")+(allComps.length>30 ? "<tr><td colspan=\"4\" style=\"color:#8899aa;text-align:center;font-size:11px\">... i "+(allComps.length-30)+" więcej</td></tr>" : "")+"</tbody></table></div></div>"+"<section><h2><span class='num'>01</span>" AI Share of Voice &mdash; per platforma</h2><div class='explain'>Wzmianki = kolumna Mentions zawiera nazw&#281; marki. &quot;Z mark&#261;&quot; = zapytania gdzie jakakolwiek marka si&#281; pojawia. SOV = wzmianek marki ÷ (wzmianek marki + wzmianek konkurent&oacute;w).</div><table><thead><tr><th>Platforma</th><th>Zapyta&#324;</th><th>Z mark&#261;</th><th>Wzmianki</th><th>Cytowania</th><th>SOV %</th><th>Mention Rate</th><th>Citation Rate</th></tr></thead><tbody>"+rows+"</tbody></table></section>"+compHtml+"<section><h2><span class='num'>03</span> Zapytania — obecno&#347;&#263; marki</h2><div class='kw-grid'><div><h3 style='font-size:12px;font-weight:700;color:#1db872;margin-bottom:8px'>&#127919; Z wzmianką marki</h3>"+bHtml+"</div><div><h3 style='font-size:12px;font-weight:700;color:#e03050;margin-bottom:8px'>&#9888; Luki — marka nieobecna</h3>"+gHtml+"</div></div></section><section><h2><span class='num'>04</span> Komentarz analityczny i rekomendacje</h2><div class='comment-box'>"+commentP+"</div></section><div class='footer'><div><strong style='color:#07111f'>sempai &middot; Let us perform!</strong><div style='margin-top:2px'>sempai.pl</div></div><div>Wygenerowano: "+date+"</div></div></div></body></html>";
 }
