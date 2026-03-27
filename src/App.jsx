@@ -701,7 +701,8 @@ export default function App() {
       <div style={{maxWidth:1060,margin:"0 auto",padding:"26px 28px 60px"}}>
 
         {/* GUIDE */}
-        {tab==="guide"&&<div>
+        {tab==="guide"&&(
+        <div>
           <STitle>Jak to działa — przeczytaj zanim zaczniesz</STitle>
 
           {/* What is this tool */}
@@ -849,10 +850,12 @@ export default function App() {
           <button onClick={()=>setTab("setup")} style={{marginTop:16,padding:"12px 28px",background:S.green+"22",border:"2px solid "+S.green+"66",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>
             Rozumiem, zaczynam → ① Klient
           </button>
-        </div>}
+        </div>
+        )}
 
         {/* SETUP */}
-        {tab==="setup"&&<div>
+        {tab==="setup"&&(
+        <div>
           <STitle>Dane klienta</STitle>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
             <Inp label="Nazwa marki *" value={brand.name} set={v=>setBrand(b=>({...b,name:v}))} ph="np. Ostry Sklep" help="Jak marka jest publicznie rozpoznawana"/>
@@ -919,10 +922,12 @@ export default function App() {
             </div>
           )}
           <button onClick={()=>setTab("import")} disabled={!(brand.name&&brand.url&&brand.industry&&brand.industryType)} style={{marginTop:10,padding:"10px 22px",background:!(brand.name&&brand.url&&brand.industry&&brand.industryType)?"transparent":S.green+"18",border:"1px solid "+(!(brand.name&&brand.url&&brand.industry&&brand.industryType)?S.border:S.green+"55"),borderRadius:10,color:!(brand.name&&brand.url&&brand.industry&&brand.industryType)?S.border:S.green,fontSize:13,fontWeight:700,cursor:!(brand.name&&brand.url&&brand.industry&&brand.industryType)?"not-allowed":"pointer"}}>Dalej → Import CSV</button>
-        </div>}
+        </div>
+        )}
 
         {/* IMPORT */}
-        {tab==="import"&&<div>
+        {tab==="import"&&(
+        <div>
           <STitle>Import plików CSV z Ahrefs</STitle>
           <p style={{fontSize:12,color:S.muted,marginBottom:14}}>Wgraj wszystkie pliki naraz. Encoding (UTF-8/UTF-16) i separator (TAB/przecinek) wykrywane automatycznie.</p>
           <div onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault();Array.from(e.dataTransfer.files).forEach(f=>{const r=new FileReader();r.onload=ev=>handleFiles(f.name,ev.target.result);r.readAsArrayBuffer(f);});}} onClick={()=>document.getElementById("fi").click()} style={{border:"2px dashed "+S.border,borderRadius:11,padding:"28px 20px",cursor:"pointer",textAlign:"center",marginBottom:14}}>
@@ -981,10 +986,12 @@ export default function App() {
           </div>}
           {errors.length>0&&unknownFiles.length===0&&<div style={{marginBottom:12,padding:"9px 13px",background:S.coral+"0f",border:"1px solid "+S.coral+"33",borderRadius:8}}>{errors.map((e,i)=><div key={i} style={{fontSize:11,color:S.coral}}>{e}</div>)}</div>}
           <button onClick={()=>setTab("dashboard")} style={{padding:"10px 22px",background:S.green+"18",border:"1px solid "+S.green+"55",borderRadius:10,color:S.green,fontSize:13,fontWeight:700,cursor:"pointer"}}>Dashboard →</button>
-        </div>}
+        </div>
+        )}
 
         {/* DASHBOARD */}
-        {tab==="dashboard"&&<div>
+        {tab==="dashboard"&&(
+        <div>
           <STitle>Dashboard Widoczności AI</STitle>
 
           {/* SOV explainer — Ahrefs methodology */}
@@ -1464,8 +1471,8 @@ export default function App() {
           </div></div>
           </div></div>
           </div>
-        </div>}
-
+        </div>
+        )}
 
         {/* REPORT */}
         {tab==="report"&&(()=>{
@@ -1686,7 +1693,8 @@ export default function App() {
         })()}
 
         {/* PROMPT */}
-        {tab==="prompt"&&<div>
+        {tab==="prompt"&&(
+        <div>
           <STitle>Prompt dla AI — generuj raport .docx</STitle>
           <div style={{position:"relative"}}>
             <pre style={{background:S.navy1,border:"1px solid "+S.border,borderRadius:11,padding:"18px 20px",fontSize:12,lineHeight:1.8,color:"#3a6080",overflow:"auto",maxHeight:480,whiteSpace:"pre-wrap",fontFamily:"monospace"}}>
@@ -1717,7 +1725,8 @@ export default function App() {
               {promptCopied?"✓ Skopiowano!":"⎘ Kopiuj"}
             </button>
           </div>
-        </div>}
+        </div>
+        )}
       </div>
     </div>
   );
