@@ -632,6 +632,20 @@ export default function App() {
   const buildArgs=()=>({brand,proc,totalQ,totalM,totalC,totalWB,sovDisplay:globalSOV,avgSOV,globalSOV,allComps,compCounts,best,worst,topBrandKws,topGapKws,allGapKws,editableComment,totalCompM,top5CompM,totalImpressions,totalGapQueries,finalComment:null});
 
 
+  // Pre-compute opportunity cards (moved out of JSX IIFE to avoid esbuild context issues)
+  const oppCards=(()=>{
+    const ops=[];
+    const z=PLATFORMS.filter(p=>proc[p.id].total>0&&proc[p.id].mentions===0);
+    if(z.length>0)ops.push({icon:"🎯",tag:"QUICK WIN",color:S.green,title:"Nieobecne platformy",body:z.map(p=>p.name).join(", ")+" — wgraj dane i stwórz content odpowiadający na pytania tej platformy."});
+    if(totalC>0&&totalM===0)ops.push({icon:"🔗",tag:"QUICK WIN",color:S.sky,title:"Cytowana bez nazwy",body:"Strona linkowana "+fmtN(totalC)+" razy bez wzmianki marki — entity building (Wikipedia, Wikidata, About Us)."});
+    if(totalM>0&&totalC>totalM*5)ops.push({icon:"📎",tag:"QUICK WIN",color:S.purple,title:"Dysproporcja wzmianek/cytowań",body:"Anchor texty z nazwą marki i breadcrumbs z marką w tytule."});
+    const tc=allComps[0];if(tc&&compCounts[tc]>totalM*1.5)ops.push({icon:"⚔️",tag:"PRIORYTET",color:S.coral,title:tc+" dominuje",body:"Przeanalizuj content "+tc+" i stwórz odpowiedzi na te same zapytania."});
+    const ls=PLATFORMS.filter(p=>proc[p.id].mentions>0&&calcSOV(proc[p.id].mentions,proc[p.id].compSet)<15);
+    if(ls.length>0)ops.push({icon:"📈",tag:"SZANSA",color:S.sky,title:"SOV < 15% na platformach",body:ls.map(p=>p.name).join(", ")+" — content plan pod te platformy."});
+    ops.push({icon:"🔄",tag:"ZAWSZE",color:S.gold,title:"Content freshness",body:"Modele AI preferują aktualne treści. Odśwież kluczowe strony co 3-6 miesięcy."});
+    return ops.slice(0,6);
+  })();
+
   const TABS=[{id:"guide",label:"⓪ Jak używać"},{id:"setup",label:"① Klient"},{id:"import",label:"② Import CSV"},{id:"dashboard",label:"③ Dashboard"},{id:"report",label:"④ Raport"},{id:"prompt",label:"⑤ Prompt AI"}];
 
   return (
@@ -1272,22 +1286,12 @@ export default function App() {
             <SL color={S.gold}>⚡ Opportunities — Quick Wins</SL>
             <div style={{fontSize:11,color:"#c09840",marginBottom:10,padding:"8px 12px",background:"#120e00",borderRadius:6,border:"1px solid #4a3800"}}>⚠️ <strong style={{color:S.gold}}>Uwaga: to są SUGESTIE, nie gotowe zadania!</strong> Sprawdź każdą zanim wdrożysz — narzędzie nie zna kontekstu Twojej branży — generowane automatycznie. Sprawdź kontekst branżowy przed wdrożeniem.</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-              {(()=>{
-                const ops=[];
-                const z=PLATFORMS.filter(p=>proc[p.id].total>0&&proc[p.id].mentions===0);
-                if(z.length>0)ops.push({icon:"🎯",tag:"QUICK WIN",color:S.green,title:"Nieobecne platformy",body:z.map(p=>p.name).join(", ")+" — dane są, marka nie pojawia się. Twórz branded content."});
-                if(totalC>0&&totalM===0)ops.push({icon:"🔗",tag:"QUICK WIN",color:S.sky,title:"Cytowana bez nazwy",body:"Strona cytowana "+fmtN(totalC)+"x ale marka nie wymieniana. Entity building: Wikipedia, Wikidata, About Us."});
-                if(totalM>0&&totalC>totalM*5)ops.push({icon:"📎",tag:"QUICK WIN",color:S.purple,title:"Dużo cytowań vs wzmiankowania",body:fmtN(totalC)+" cytowań vs "+fmtN(totalM)+" wzmianek AI ufa stronie ale nie kojarzy nazwy. Wzmocnij anchor texty."});
-                const tc=allComps[0];if(tc&&compCounts[tc]>totalM*1.5)ops.push({icon:"⚔️",tag:"PRIORYTET",color:S.coral,title:"Konkurent dominuje",body:tc+" ma "+fmtN(compCounts[tc])+" wzmianek vs "+fmtN(totalM)+" Twojej. Zbadaj ich content i stwórz odpowiedzi na te same zapytania."});
-                const ls=PLATFORMS.filter(p=>proc[p.id].mentions>0&&calcSOV(proc[p.id].mentions,proc[p.id].compSet)<15);
-                if(ls.length>0)ops.push({icon:"📈",tag:"SZANSA",color:S.sky,title:"SOV < 15%",body:ls.map(p=>p.name).join(", ")+" — SOV poniżej 15%. Twórz FAQ, how-to, listy porównawcze."});
-                ops.push({icon:"🔄",tag:"ZAWSZE",color:S.gold,title:"Content freshness",body:"Modele AI preferują świeże treści. Zaktualizuj kluczowe strony — data, FAQ z aktualnymi danymi."});
-                return ops.slice(0,6).map((op,i)=><div key={i} style={{padding:"11px 13px",background:op.color+"08",border:"1px solid "+op.color+"22",borderRadius:9}}>
+              {oppCards.map((op,i)=>(
+                <div key={i} style={{padding:"11px 13px",background:op.color+"08",border:"1px solid "+op.color+"22",borderRadius:9}}>
                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}><span style={{fontSize:13}}>{op.icon}</span><span style={{fontSize:9,fontWeight:800,color:op.color,background:op.color+"20",borderRadius:4,padding:"1px 5px",letterSpacing:"0.7px",textTransform:"uppercase"}}>{op.tag}</span><span style={{fontSize:11,fontWeight:700,color:S.text}}>{op.title}</span></div>
                   <div style={{fontSize:11,color:"#90b8cc",lineHeight:1.65,marginTop:2}}>{op.body}</div>
-                </div>);
-              })()}
-            </div>
+                </div>
+              ))}            </div>
           </Card>
 
           {/* Advanced Metrics — beyond Ahrefs */}
